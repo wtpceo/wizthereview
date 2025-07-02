@@ -19,8 +19,24 @@ export function Header() {
   const router = useRouter()
 
   const handleSignOut = async () => {
-    await signOut()
-    router.push('/login')
+    try {
+      console.log('🔄 로그아웃 처리 시작...')
+      await signOut()
+      
+      // 로그아웃 후 로그인 페이지로 리다이렉트
+      router.push('/login')
+      
+      // 페이지 새로고침으로 확실히 세션 정리
+      setTimeout(() => {
+        window.location.href = '/login'
+      }, 100)
+      
+      console.log('✅ 로그아웃 처리 완료')
+    } catch (error) {
+      console.error('❌ 로그아웃 처리 오류:', error)
+      // 오류가 발생해도 로그인 페이지로 리다이렉트
+      window.location.href = '/login'
+    }
   }
 
   // 역할 한국어 변환

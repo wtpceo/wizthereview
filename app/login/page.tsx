@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Loader2, LogIn, Building2 } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/components/auth/auth-context'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -16,6 +16,15 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
+  const { user, signIn, loading: authLoading } = useAuth()
+
+  // 이미 로그인된 경우 대시보드로 리다이렉트
+  useEffect(() => {
+    if (user && !authLoading) {
+      console.log('✅ 이미 로그인된 사용자, 대시보드로 이동:', user.email)
+      router.push('/dashboard')
+    }
+  }, [user, authLoading, router])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -23,21 +32,19 @@ export default function LoginPage() {
     setError('')
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
+      console.log('🔐 로그인 시도:', email)
+      const result = await signIn(email, password)
 
-      if (error) {
-        setError(error.message)
+      if (result.error) {
+        console.error('❌ 로그인 실패:', result.error)
+        setError(result.error)
         return
       }
 
-      if (data.user) {
-        // 로그인 성공 - 대시보드로 리다이렉트
-        router.push('/dashboard')
-      }
+      console.log('✅ 로그인 성공, 대시보드로 이동')
+      router.push('/dashboard')
     } catch (err) {
+      console.error('💥 로그인 예외:', err)
       setError('로그인 중 오류가 발생했습니다.')
     } finally {
       setLoading(false)
@@ -122,20 +129,6 @@ export default function LoginPage() {
                 )}
               </Button>
             </form>
-
-            {/* 개발용 임시 계정 안내 */}
-            <div className="pt-6 border-t space-y-3">
-              <p className="text-sm text-gray-600 text-center">
-                개발 테스트용 계정
-              </p>
-              <div className="bg-gray-50 p-3 rounded-lg text-xs space-y-1">
-                <div><span className="font-medium">이메일:</span> admin@clime.com</div>
-                <div><span className="font-medium">비밀번호:</span> admin123!</div>
-                <p className="text-gray-500 text-xs mt-2">
-                  * 실제 서비스에서는 제거될 예정입니다
-                </p>
-              </div>
-            </div>
           </CardContent>
         </Card>
 
