@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Search, Edit, Trash2, Eye, Plus, X, Download, Filter, MoreHorizontal, Info, EyeOff, Copy, Check, Shield } from "lucide-react"
+import { Search, Edit, Trash2, Eye, Plus, X, Download, Filter, MoreHorizontal, Info, EyeOff, Copy, Check } from "lucide-react"
 import { downloadClientsExcel, downloadClientsWithPlatformsExcel } from "@/lib/excel-utils"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { getClientPlatforms, getClients, createClient, updateClient, updateClientPlatforms } from "@/lib/database"
@@ -64,6 +64,8 @@ export default function ClientsPage() {
   const [editingClient, setEditingClient] = useState<Client | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   
+
+  
   // 플랫폼 정보 모달 관련 상태
   const [isPlatformModalOpen, setIsPlatformModalOpen] = useState(false)
   const [selectedClientPlatforms, setSelectedClientPlatforms] = useState<ClientPlatform[]>([])
@@ -88,6 +90,8 @@ export default function ClientsPage() {
   const [platforms, setPlatforms] = useState<PlatformInfo[]>([
     { id: "1", platform: "", platformId: "", platformPassword: "", shopId: "" },
   ])
+
+
 
   // 컴포넌트 마운트 시 클라이언트 목록 로드
   const loadClients = async () => {
@@ -217,11 +221,13 @@ export default function ClientsPage() {
     setIsSubmitting(true)
 
     try {
-      // 현재 사용자의 대행사 ID 확인
+      // 모든 사용자는 자신의 대행사 ID를 사용 (슈퍼 관리자도 이제 자신의 대행사를 가짐)
       if (!user?.agency_id) {
-        alert('❌ 대행사 정보를 찾을 수 없습니다.')
+        alert('❌ 대행사 정보를 찾을 수 없습니다. 관리자에게 문의하세요.')
         return
       }
+      
+      const targetAgencyId = user.agency_id
 
       // 플랫폼 정보 준비
       const platformData = platforms
@@ -270,7 +276,7 @@ export default function ClientsPage() {
           store_name: formData.storeName,
           business_number: formData.businessNumber,
           owner_phone: formData.ownerPhone,
-          agency_id: user.agency_id,
+          agency_id: targetAgencyId,
           memo: formData.memo,
           platforms: platformData
         })
@@ -386,6 +392,9 @@ export default function ClientsPage() {
                     <div className="w-2 h-6 bg-blue-600 rounded-full"></div>
                     <h3 className="text-lg font-semibold text-gray-900">기본 정보</h3>
                   </div>
+                  
+
+                  
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label htmlFor="storeName" className="text-sm font-medium">
