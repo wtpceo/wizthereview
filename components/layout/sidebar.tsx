@@ -6,9 +6,7 @@ import { cn } from "@/lib/utils"
 import { LayoutDashboard, Users, Building2, LogOut, Shield, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useState } from "react"
-
-// 임시로 관리자 여부를 확인하는 함수 (나중에 실제 인증으로 대체)
-const isAdmin = true // 실제로는 로그인 정보에서 가져올 값
+import { useAuth } from "@/components/auth/auth-context"
 
 const navigation = [
   {
@@ -34,6 +32,14 @@ const adminNavigation = [
 export function Sidebar() {
   const pathname = usePathname()
   const [isCollapsed, setIsCollapsed] = useState(false)
+  const { user, signOut } = useAuth()
+  
+  // 슈퍼 관리자인지 확인
+  const isSuperAdmin = user?.role === 'super_admin'
+
+  const handleLogout = async () => {
+    await signOut()
+  }
 
   return (
     <div
@@ -83,8 +89,8 @@ export function Sidebar() {
           )
         })}
 
-        {/* 관리자 메뉴 */}
-        {isAdmin && (
+        {/* 관리자 메뉴 - 슈퍼 관리자만 표시 */}
+        {isSuperAdmin && (
           <>
             <div className="border-t border-gray-700 my-4"></div>
             {!isCollapsed && (
@@ -120,6 +126,7 @@ export function Sidebar() {
       <div className="p-3 border-t border-gray-700">
         <Button
           variant="ghost"
+          onClick={handleLogout}
           className={cn(
             "w-full text-gray-300 hover:bg-red-600/10 hover:text-red-400 transition-colors",
             isCollapsed ? "justify-center px-0" : "justify-start",

@@ -12,10 +12,13 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Search, Edit, Trash2, Eye, Plus, X, Download, Filter, MoreHorizontal, Info, EyeOff, Copy, Check } from "lucide-react"
+import { Search, Edit, Trash2, Eye, Plus, X, Download, Filter, MoreHorizontal, Info, EyeOff, Copy, Check, Shield } from "lucide-react"
 import { downloadClientsExcel, downloadClientsWithPlatformsExcel } from "@/lib/excel-utils"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { getClientPlatforms, getClients } from "@/lib/database"
+import { getClientPlatforms, getClients, createClient, updateClient, updateClientPlatforms } from "@/lib/database"
+import { useAuth } from "@/components/auth/auth-context"
+import { useRouter } from "next/navigation"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 const PLATFORMS = ["네이버플레이스", "배달의민족", "쿠팡이츠", "요기요", "땡겨요", "배달이음", "카카오매장"]
 
@@ -49,42 +52,17 @@ interface Client {
   memo?: string
 }
 
-// 임시로 현재 로그인한 대행사 정보 (실제로는 로그인 시스템에서 가져올 데이터)
-const currentAgency = "ABC 광고대행사" // 실제로는 로그인한 사용자의 대행사명
-const isAdmin = false // 관리자 여부
-
-// 임시 데이터
-const initialClients: Client[] = [
-  {
-    id: 1,
-    storeName: "맛있는 치킨집",
-    businessNumber: "123-45-67890",
-    ownerPhone: "010-1234-5678",
-    platforms: ["네이버플레이스", "배달의민족", "쿠팡이츠"],
-    registeredAt: "2024-01-15",
-    agency: "ABC 광고대행사",
-    memo: "주말 매출이 높음",
-  },
-  {
-    id: 3,
-    storeName: "신선한 마트",
-    businessNumber: "345-67-89012",
-    ownerPhone: "010-3456-7890",
-    platforms: ["네이버플레이스", "쿠팡이츠"],
-    registeredAt: "2024-01-13",
-    agency: "ABC 광고대행사",
-  },
-].filter((client) => isAdmin || client.agency === currentAgency)
-
-const agencies = isAdmin ? ["전체", "ABC 광고대행사", "XYZ 마케팅", "123 디지털"] : ["전체"]
-
 export default function ClientsPage() {
-  const [clients, setClients] = useState<Client[]>(initialClients)
+  const { user } = useAuth()
+  const router = useRouter()
+  
+  const [clients, setClients] = useState<Client[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedAgency, setSelectedAgency] = useState("전체")
   const [filteredClients, setFilteredClients] = useState(clients)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingClient, setEditingClient] = useState<Client | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   
   // 플랫폼 정보 모달 관련 상태
   const [isPlatformModalOpen, setIsPlatformModalOpen] = useState(false)
@@ -112,23 +90,31 @@ export default function ClientsPage() {
   ])
 
   // 컴포넌트 마운트 시 클라이언트 목록 로드
-  useEffect(() => {
-    const loadClients = async () => {
-      try {
-        const { data, error } = await getClients()
-        if (error) {
-          console.error('Error loading clients:', error)
-        } else if (data) {
-          setClients(data)
-          setFilteredClients(data)
-        }
-      } catch (error) {
+  const loadClients = async () => {
+    try {
+      console.log('📊 클라이언트 목록 로딩 중...')
+      
+      // 슈퍼 관리자가 아닌 경우 자신의 대행사 클라이언트만 조회
+      const agencyId = user?.role === 'super_admin' ? undefined : user?.agency_id
+      
+      const { data, error } = await getClients(agencyId)
+      if (error) {
         console.error('Error loading clients:', error)
+      } else if (data) {
+        console.log('✅ 클라이언트 목록 로딩 성공:', data.length)
+        setClients(data)
+        setFilteredClients(data)
       }
+    } catch (error) {
+      console.error('Error loading clients:', error)
     }
+  }
 
-    loadClients()
-  }, [])
+  useEffect(() => {
+    if (user) { // 사용자 정보가 로드된 후에만 실행
+      loadClients()
+    }
+  }, [user])
 
   const handleSearch = () => {
     let filtered = clients
@@ -151,7 +137,7 @@ export default function ClientsPage() {
 
   const handleDownloadExcel = async () => {
     const dataToDownload = filteredClients.length > 0 ? filteredClients : clients
-    const filename = `${currentAgency}_광고주목록`
+    const filename = `${user?.agency_name || 'Clime'}_광고주목록`
     
     setIsDownloadingExcel(true)
     
@@ -222,37 +208,96 @@ export default function ClientsPage() {
       ownerPhone: client.ownerPhone,
       memo: client.memo || "",
     })
-    setPlatforms([{ id: "1", platform: "", platformId: "", platformPassword: "", shopId: "" }])
     setEditingClient(client)
     setIsDialogOpen(true)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setIsSubmitting(true)
 
-    const platformNames = platforms.filter((p) => p.platform).map((p) => p.platform)
-
-    if (editingClient) {
-      const updatedClients = clients.map((client) =>
-        client.id === editingClient.id ? { ...client, ...formData, platforms: platformNames } : client,
-      )
-      setClients(updatedClients)
-      setFilteredClients(updatedClients)
-    } else {
-      const newClient: Client = {
-        id: Date.now(),
-        ...formData,
-        platforms: platformNames,
-        registeredAt: new Date().toISOString().split("T")[0],
-        agency: currentAgency,
+    try {
+      // 현재 사용자의 대행사 ID 확인
+      if (!user?.agency_id) {
+        alert('❌ 대행사 정보를 찾을 수 없습니다.')
+        return
       }
-      const updatedClients = [...clients, newClient]
-      setClients(updatedClients)
-      setFilteredClients(updatedClients)
-    }
 
-    setIsDialogOpen(false)
-    resetForm()
+      // 플랫폼 정보 준비
+      const platformData = platforms
+        .filter(p => p.platform) // 플랫폼이 선택된 것만
+        .map(p => ({
+          platform_name: p.platform,
+          platform_id: p.platformId,
+          platform_password: p.platformPassword,
+          shop_id: p.shopId
+        }))
+
+      if (editingClient) {
+        // 수정 모드
+        console.log('📝 광고주 정보 수정 중...', editingClient.id)
+        
+        const { data, error } = await updateClient(editingClient.id, {
+          store_name: formData.storeName,
+          business_number: formData.businessNumber,
+          owner_phone: formData.ownerPhone,
+          memo: formData.memo
+        })
+
+        if (error) {
+          console.error('❌ 광고주 수정 실패:', error)
+          alert('❌ 광고주 정보 수정에 실패했습니다.')
+          return
+        }
+
+        // 플랫폼 정보 업데이트
+        if (platformData.length > 0) {
+          const { error: platformError } = await updateClientPlatforms(editingClient.id, platformData)
+          if (platformError) {
+            console.error('❌ 플랫폼 정보 수정 실패:', platformError)
+            alert('❌ 플랫폼 정보 수정에 실패했습니다.')
+            return
+          }
+        }
+
+        console.log('✅ 광고주 정보 수정 성공')
+        alert('✅ 광고주 정보가 성공적으로 수정되었습니다!')
+      } else {
+        // 새 광고주 등록
+        console.log('🆕 새 광고주 등록 중...')
+        
+        const { data, error } = await createClient({
+          store_name: formData.storeName,
+          business_number: formData.businessNumber,
+          owner_phone: formData.ownerPhone,
+          agency_id: user.agency_id,
+          memo: formData.memo,
+          platforms: platformData
+        })
+
+        if (error) {
+          console.error('❌ 광고주 등록 실패:', error)
+          alert('❌ 광고주 등록에 실패했습니다.')
+          return
+        }
+
+        console.log('✅ 광고주 등록 성공:', data)
+        alert('✅ 광고주가 성공적으로 등록되었습니다!')
+      }
+
+      // 성공 후 처리
+      setIsDialogOpen(false)
+      resetForm()
+      
+      // 클라이언트 목록 새로고침
+      await loadClients()
+      
+    } catch (error) {
+      console.error('💥 예상치 못한 오류:', error)
+      alert('❌ 예상치 못한 오류가 발생했습니다.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   // 플랫폼 정보 조회 함수
@@ -492,9 +537,17 @@ export default function ClientsPage() {
                   </Button>
                   <Button
                     type="submit"
+                    disabled={isSubmitting}
                     className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
                   >
-                    {editingClient ? "수정 완료" : "등록 완료"}
+                    {isSubmitting ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        {editingClient ? '수정 중...' : '등록 중...'}
+                      </>
+                    ) : (
+                      editingClient ? "수정 완료" : "등록 완료"
+                    )}
                   </Button>
                 </div>
               </form>
@@ -527,7 +580,7 @@ export default function ClientsPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {agencies.map((agency) => (
+                {["전체", "ABC 광고대행사", "XYZ 마케팅", "123 디지털"].map((agency) => (
                   <SelectItem key={agency} value={agency}>
                     {agency}
                   </SelectItem>

@@ -8,11 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Search, Building2, Users, TrendingUp, Calendar, Eye, Edit, Trash2, Download, Info, EyeOff, Copy, Check, Plus } from "lucide-react"
+import { Search, Building2, Users, TrendingUp, Calendar, Eye, Edit, Trash2, Download, Info, EyeOff, Copy, Check, Plus, Shield, AlertTriangle } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { downloadClientsExcel, downloadAgenciesExcel } from "@/lib/excel-utils"
 import { getClientPlatforms, getAgencies, getClients } from "@/lib/database"
+import { useAuth } from "@/components/auth/auth-context"
+import { useRouter } from "next/navigation"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 // 플랫폼 정보 인터페이스
 interface ClientPlatform {
@@ -51,6 +54,25 @@ interface Client {
 }
 
 export default function AdminPage() {
+  const { user, loading: authLoading } = useAuth()
+  const router = useRouter()
+
+  // 권한 체크
+  useEffect(() => {
+    if (!authLoading) {
+      if (!user) {
+        router.push('/login')
+        return
+      }
+      
+      if (user.role !== 'super_admin') {
+        // 슈퍼 관리자가 아닌 경우 대시보드로 리다이렉트
+        router.push('/dashboard')
+        return
+      }
+    }
+  }, [user, authLoading, router])
+
   // 데이터 상태
   const [agencies, setAgencies] = useState<Agency[]>([])
   const [allClients, setAllClients] = useState<Client[]>([])
@@ -328,6 +350,46 @@ export default function AdminPage() {
     }))
   }
 
+  // 인증 로딩 중
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">권한을 확인하는 중...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // 권한 없음
+  if (!user || user.role !== 'super_admin') {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center max-w-md mx-auto p-6">
+          <Alert className="border-red-200 bg-red-50 mb-6">
+            <AlertTriangle className="h-4 w-4 text-red-600" />
+            <AlertDescription className="text-red-800">
+              <strong>접근 권한이 없습니다</strong>
+              <br />
+              이 페이지는 슈퍼 관리자만 접근할 수 있습니다.
+              <br />
+              현재 권한: {user?.role || '없음'}
+            </AlertDescription>
+          </Alert>
+          <Button 
+            onClick={() => router.push('/dashboard')} 
+            className="w-full"
+            variant="outline"
+          >
+            대시보드로 이동
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  // 데이터 로딩 중
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
