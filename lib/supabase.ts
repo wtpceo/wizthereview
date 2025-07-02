@@ -43,11 +43,27 @@ export const supabase = (() => {
   if (!supabaseClient) {
     try {
       const { supabaseUrl, supabaseAnonKey } = getSupabaseConfig()
+      
+      // Placeholder 값 체크
+      if (supabaseUrl === 'https://placeholder.supabase.co' || supabaseAnonKey === 'placeholder-key') {
+        console.warn('⚠️ Placeholder 환경 변수 감지 - 실제 값이 설정되지 않음')
+        // 에러를 던지지 않고 더미 클라이언트 생성
+        supabaseClient = createClient(supabaseUrl, supabaseAnonKey)
+        return supabaseClient
+      }
+      
       supabaseClient = createClient(supabaseUrl, supabaseAnonKey)
       console.log('✅ Supabase 클라이언트 초기화 성공')
     } catch (error) {
       console.error('❌ Supabase 클라이언트 초기화 실패:', error)
-      throw error
+      // 에러를 던지지 않고 더미 클라이언트 생성하여 앱이 crash되지 않도록 함
+      try {
+        supabaseClient = createClient('https://placeholder.supabase.co', 'placeholder-key')
+        console.warn('⚠️ 더미 Supabase 클라이언트로 초기화됨')
+      } catch (fallbackError) {
+        console.error('💥 더미 클라이언트 생성도 실패:', fallbackError)
+        throw fallbackError
+      }
     }
   }
   return supabaseClient

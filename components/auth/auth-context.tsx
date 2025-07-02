@@ -15,6 +15,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // 현재 사용자 프로필 가져오기
   const fetchUserProfile = async () => {
     try {
+      // Supabase 클라이언트가 placeholder인지 확인
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+      if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
+        console.warn('⚠️ Supabase 환경 변수가 설정되지 않음 - 인증 건너뛰기')
+        setUser(null)
+        setLoading(false)
+        return
+      }
+
       const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
       
       console.log('🔍 인증 사용자 확인:', authUser?.id, authUser?.email)
@@ -115,22 +124,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // 인증 상태 변화 감지
   useEffect(() => {
-    // 초기 사용자 확인
-    fetchUserProfile()
-
-    // 인증 상태 변화 리스너
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (event === 'SIGNED_IN' && session) {
-          await fetchUserProfile()
-        } else if (event === 'SIGNED_OUT') {
-          setUser(null)
-        }
+    try {
+      // 환경 변수 확인
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+      if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
+        console.warn('⚠️ Supabase 환경 변수가 설정되지 않음 - 인증 리스너 건너뛰기')
         setLoading(false)
+        return
       }
-    )
 
-    return () => subscription.unsubscribe()
+      // 초기 사용자 확인
+      fetchUserProfile()
+
+      // 인증 상태 변화 리스너
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(
+        async (event, session) => {
+          if (event === 'SIGNED_IN' && session) {
+            await fetchUserProfile()
+          } else if (event === 'SIGNED_OUT') {
+            setUser(null)
+          }
+          setLoading(false)
+        }
+      )
+
+      return () => subscription.unsubscribe()
+    } catch (error) {
+      console.error('❌ 인증 리스너 설정 실패:', error)
+      setLoading(false)
+    }
   }, [])
 
   // 로딩 완료 후 설정
