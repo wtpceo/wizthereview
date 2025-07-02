@@ -89,10 +89,27 @@ export async function createAgencyWithAccount(agencyData: {
       password_length: agencyData.adminPassword.length
     })
     
+    // 먼저 이메일 중복 체크
+    console.log('🔍 이메일 중복 체크 중...', agencyData.adminEmail)
+    const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers()
+    const emailExists = existingUser?.users?.some(user => user.email === agencyData.adminEmail)
+    
+    if (emailExists) {
+      console.error('❌ 이메일 중복:', agencyData.adminEmail)
+      // 대행사 정보 롤백
+      await supabase.from('agencies').delete().eq('id', agencyResult.id as number)
+      throw new Error(`이메일 주소 '${agencyData.adminEmail}'가 이미 사용 중입니다.`)
+    }
+
+    // 트리거 문제를 피하기 위해 더 단순한 방식으로 사용자 생성
     const { data: userResult, error: userError } = await supabaseAdmin.auth.admin.createUser({
       email: agencyData.adminEmail,
       password: agencyData.adminPassword,
-      email_confirm: true // 이메일 확인 건너뛰기
+      email_confirm: true, // 이메일 확인 건너뛰기
+      user_metadata: {
+        full_name: agencyData.adminName,
+        role: 'agency_admin'
+      }
     })
 
     console.log('👤 사용자 생성 결과:', {
@@ -115,13 +132,33 @@ export async function createAgencyWithAccount(agencyData: {
       
       // 대행사 정보도 롤백
       await supabase.from('agencies').delete().eq('id', agencyResult.id as number)
-      throw new Error(`관리자 계정 생성 실패: ${userError?.message || '사용자 생성 실패'}`)
+      
+      // 더 사용자 친화적인 에러 메시지
+      let errorMessage = '관리자 계정 생성에 실패했습니다.'
+      if (userError?.message?.includes('already registered')) {
+        errorMessage = '해당 이메일로 이미 등록된 계정이 있습니다.'
+      } else if (userError?.message?.includes('weak password')) {
+        errorMessage = '비밀번호가 너무 약합니다. 8자 이상, 대소문자, 숫자를 포함해주세요.'
+      } else if (userError?.message) {
+        errorMessage = userError.message
+      }
+      
+      throw new Error(errorMessage)
     }
 
     console.log('✅ 관리자 계정 생성 성공:', userResult.user.id)
 
     // 3단계: 사용자 프로필 생성
     console.log('📋 3단계: 사용자 프로필 생성 중...')
+    console.log('📊 프로필 데이터:', {
+      id: userResult.user.id,
+      email: agencyData.adminEmail,
+      full_name: agencyData.adminName,
+      role: 'agency_admin',
+      agency_id: agencyResult.id,
+      is_active: true
+    })
+    
     const { data: profileResult, error: profileError } = await supabase
       .from('user_profiles')
       .insert([{
@@ -136,11 +173,30 @@ export async function createAgencyWithAccount(agencyData: {
       .single()
 
     if (profileError) {
-      console.error('❌ 프로필 생성 실패:', profileError)
+      console.error('❌ 프로필 생성 실패 - 상세 정보:', {
+        message: profileError.message,
+        details: profileError.details,
+        hint: profileError.hint,
+        code: profileError.code
+      })
+      
       // 롤백 작업
       await supabaseAdmin.auth.admin.deleteUser(userResult.user.id)
       await supabase.from('agencies').delete().eq('id', agencyResult.id as number)
-      throw new Error(`프로필 생성 실패: ${profileError.message}`)
+      
+      // 더 구체적인 에러 메시지
+      let errorMessage = '사용자 프로필 생성에 실패했습니다.'
+      if (profileError.code === '23505') {
+        errorMessage = '이미 존재하는 사용자입니다.'
+      } else if (profileError.code === '23503') {
+        errorMessage = '참조 무결성 오류가 발생했습니다.'
+      } else if (profileError.message?.includes('policy')) {
+        errorMessage = '데이터베이스 접근 권한 오류가 발생했습니다.'
+      } else if (profileError.message) {
+        errorMessage = profileError.message
+      }
+      
+      throw new Error(errorMessage)
     }
 
     console.log('✅ 프로필 생성 성공')

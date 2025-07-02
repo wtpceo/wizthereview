@@ -1,126 +1,55 @@
 import { createClient } from '@supabase/supabase-js'
 
-// 환경 변수 확인 및 에러 처리 (빌드 시점에서 안전하게 처리)
-function getSupabaseConfig() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  
-  // 빌드 시점에서는 에러를 던지지 않고 기본값 반환
-  if (typeof window === 'undefined' && (!supabaseUrl || !supabaseAnonKey)) {
-    console.warn('⚠️ 환경 변수가 빌드 시점에 로드되지 않음 - 런타임에서 재시도')
-    return { 
-      supabaseUrl: supabaseUrl || 'https://placeholder.supabase.co', 
-      supabaseAnonKey: supabaseAnonKey || 'placeholder-key' 
-    }
-  }
-  
-  if (!supabaseUrl) {
-    console.error('NEXT_PUBLIC_SUPABASE_URL is not defined')
-    throw new Error('Supabase URL이 설정되지 않았습니다. .env.local 파일을 확인해주세요.')
-  }
-  
-  if (!supabaseAnonKey) {
-    console.error('NEXT_PUBLIC_SUPABASE_ANON_KEY is not defined')
-    throw new Error('Supabase ANON KEY가 설정되지 않았습니다. .env.local 파일을 확인해주세요.')
-  }
-  
-  // URL과 키의 유효성 검사 (placeholder가 아닐 때만)
-  if (supabaseUrl !== 'https://placeholder.supabase.co' && !supabaseUrl.startsWith('https://')) {
-    throw new Error('Supabase URL 형식이 올바르지 않습니다.')
-  }
-  
-  if (supabaseAnonKey !== 'placeholder-key' && !supabaseAnonKey.startsWith('eyJ')) {
-    throw new Error('Supabase API 키 형식이 올바르지 않습니다.')
-  }
-  
-  return { supabaseUrl, supabaseAnonKey }
+// 환경 변수 직접 가져오기
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
+// 디버깅용 로그
+console.log('🔍 Supabase 환경 변수 확인:', {
+  hasUrl: !!supabaseUrl,
+  hasKey: !!supabaseAnonKey,
+  urlPrefix: supabaseUrl?.substring(0, 30) + '...',
+  keyPrefix: supabaseAnonKey?.substring(0, 20) + '...'
+})
+
+// 환경 변수 검증
+if (!supabaseUrl) {
+  console.error('❌ NEXT_PUBLIC_SUPABASE_URL이 설정되지 않음')
+  throw new Error('Supabase URL이 설정되지 않았습니다.')
 }
 
-// 클라이언트 사이드에서 사용할 Supabase 클라이언트
-let supabaseClient: ReturnType<typeof createClient> | null = null
-
-export const supabase = (() => {
-  if (!supabaseClient) {
-    try {
-      const { supabaseUrl, supabaseAnonKey } = getSupabaseConfig()
-      
-      // Placeholder 값 체크
-      if (supabaseUrl === 'https://placeholder.supabase.co' || supabaseAnonKey === 'placeholder-key') {
-        console.warn('⚠️ Placeholder 환경 변수 감지 - 실제 값이 설정되지 않음')
-        // 에러를 던지지 않고 더미 클라이언트 생성
-        supabaseClient = createClient(supabaseUrl, supabaseAnonKey)
-        return supabaseClient
-      }
-      
-      supabaseClient = createClient(supabaseUrl, supabaseAnonKey)
-      console.log('✅ Supabase 클라이언트 초기화 성공')
-    } catch (error) {
-      console.error('❌ Supabase 클라이언트 초기화 실패:', error)
-      // 에러를 던지지 않고 더미 클라이언트 생성하여 앱이 crash되지 않도록 함
-      try {
-        supabaseClient = createClient('https://placeholder.supabase.co', 'placeholder-key')
-        console.warn('⚠️ 더미 Supabase 클라이언트로 초기화됨')
-      } catch (fallbackError) {
-        console.error('💥 더미 클라이언트 생성도 실패:', fallbackError)
-        throw fallbackError
-      }
-    }
-  }
-  return supabaseClient
-})()
-
-// 서버 사이드에서 사용할 Supabase 클라이언트 (Service Role Key 사용)
-let supabaseAdminClient: ReturnType<typeof createClient> | null = null
-
-// Service Role Key를 더 안전하게 가져오는 함수
-function getServiceRoleKey() {
-  // 여러 방법으로 환경 변수 접근 시도
-  const serviceRoleKey = 
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    (typeof window === 'undefined' && require('fs').existsSync('.env.local') ? 
-      require('fs').readFileSync('.env.local', 'utf8')
-        .split('\n')
-        .find((line: string) => line.startsWith('SUPABASE_SERVICE_ROLE_KEY='))
-        ?.split('=')[1]
-        ?.trim() : 
-      null)
-  
-  console.log('🔑 Service Role Key 로딩 상태:', {
-    fromProcessEnv: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-    length: serviceRoleKey?.length || 0,
-    exists: !!serviceRoleKey
-  })
-  
-  return serviceRoleKey
+if (!supabaseAnonKey) {
+  console.error('❌ NEXT_PUBLIC_SUPABASE_ANON_KEY가 설정되지 않음')
+  throw new Error('Supabase Anon Key가 설정되지 않았습니다.')
 }
 
-export const supabaseAdmin = (() => {
-  if (!supabaseAdminClient) {
-    try {
-      const { supabaseUrl } = getSupabaseConfig()
-      const serviceRoleKey = getServiceRoleKey()
-      
-      if (!serviceRoleKey) {
-        console.warn('⚠️ SUPABASE_SERVICE_ROLE_KEY가 설정되지 않음 - 관리자 기능 제한')
-        // 서비스 롤 키가 없으면 일반 클라이언트 반환
-        return supabase
-      }
-      
-      supabaseAdminClient = createClient(supabaseUrl, serviceRoleKey, {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      })
-      console.log('✅ Supabase 관리자 클라이언트 초기화 성공')
-    } catch (error) {
-      console.error('❌ Supabase 관리자 클라이언트 초기화 실패:', error)
-      // 실패 시 일반 클라이언트 반환
-      return supabase
-    }
+// Supabase 클라이언트 생성
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true
   }
-  return supabaseAdminClient || supabase
-})()
+})
+
+console.log('✅ Supabase 클라이언트 초기화 완료')
+
+// 서버 사이드용 관리자 클라이언트
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+export const supabaseAdmin = serviceRoleKey 
+  ? createClient(supabaseUrl, serviceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    })
+  : supabase // Service Role Key가 없으면 일반 클라이언트 사용
+
+console.log('🔑 Service Role Key 상태:', {
+  exists: !!serviceRoleKey,
+  length: serviceRoleKey?.length || 0
+})
 
 // 데이터베이스 타입 정의
 export interface Database {

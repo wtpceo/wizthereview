@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Search, Edit, Trash2, Eye, Plus, X, Download, Filter, MoreHorizontal, Info, EyeOff, Copy, Check } from "lucide-react"
+import { Search, Edit, Trash2, Eye, Plus, X, Download, Filter, MoreHorizontal, Info, EyeOff, Copy, Check, Users } from "lucide-react"
 import { downloadClientsExcel, downloadClientsWithPlatformsExcel } from "@/lib/excel-utils"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { getClientPlatforms, getClients, createClient, updateClient, updateClientPlatforms } from "@/lib/database"
@@ -354,30 +354,35 @@ export default function ClientsPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 md:space-y-8">
       {/* 헤더 */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">광고주 관리</h1>
-          <p className="text-gray-600 mt-1">광고주를 등록하고 관리하세요</p>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">광고주 관리</h1>
+          <p className="text-sm md:text-base text-gray-600 mt-1">광고주를 등록하고 관리하세요</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
           <Button
             variant="outline"
             onClick={handleDownloadExcel}
             disabled={isDownloadingExcel}
-            className="hover:bg-green-50 hover:border-green-200 bg-transparent"
+            className="hover:bg-green-50 hover:border-green-200 bg-transparent text-sm"
+            size="sm"
           >
-            <Download className={`h-4 w-4 mr-2 ${isDownloadingExcel ? 'animate-spin' : ''}`} />
-            {isDownloadingExcel ? '다운로드 중...' : '엑셀 다운로드'}
+            <Download className={`h-4 w-4 sm:mr-2 ${isDownloadingExcel ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">{isDownloadingExcel ? '다운로드 중...' : '엑셀 다운로드'}</span>
+            <span className="sm:hidden">{isDownloadingExcel ? '다운로드...' : '엑셀'}</span>
           </Button>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button
                 onClick={openNewClientDialog}
-                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-sm"
+                size="sm"
               >
-                <Plus className="h-4 w-4 mr-2" />새 광고주 등록
+                <Plus className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">새 광고주 등록</span>
+                <span className="sm:hidden">등록</span>
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -567,58 +572,65 @@ export default function ClientsPage() {
 
       {/* 검색 및 필터 */}
       <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
-        <CardHeader>
+        <CardHeader className="pb-4">
           <div className="flex items-center space-x-2">
-            <Filter className="h-5 w-5 text-blue-600" />
-            <CardTitle>검색 및 필터</CardTitle>
+            <Filter className="h-4 w-4 md:h-5 md:w-5 text-blue-600" />
+            <CardTitle className="text-lg md:text-xl">검색 및 필터</CardTitle>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-4">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <Input
                 placeholder="매장명, 사업자번호, 전화번호로 검색..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 focus:ring-2 focus:ring-blue-500"
+                className="pl-10 focus:ring-2 focus:ring-blue-500 text-sm"
               />
             </div>
-            <Select value={selectedAgency} onValueChange={setSelectedAgency}>
-              <SelectTrigger className="w-48 focus:ring-2 focus:ring-blue-500">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {["전체", "ABC 광고대행사", "XYZ 마케팅", "123 디지털"].map((agency) => (
-                  <SelectItem key={agency} value={agency}>
-                    {agency}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button onClick={handleSearch} className="bg-blue-600 hover:bg-blue-700">
-              <Search className="h-4 w-4 mr-2" />
-              검색
-            </Button>
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-2">
+              <Select value={selectedAgency} onValueChange={setSelectedAgency}>
+                <SelectTrigger className="w-full sm:w-40 md:w-48 focus:ring-2 focus:ring-blue-500 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {["전체", "ABC 광고대행사", "XYZ 마케팅", "123 디지털"].map((agency) => (
+                    <SelectItem key={agency} value={agency}>
+                      {agency}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button 
+                onClick={handleSearch} 
+                className="bg-blue-600 hover:bg-blue-700 text-sm"
+                size="sm"
+              >
+                <Search className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">검색</span>
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
 
       {/* 광고주 목록 */}
       <Card className="shadow-sm hover:shadow-md transition-shadow duration-200">
-        <CardHeader>
-          <div className="flex items-center justify-between">
+        <CardHeader className="pb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
             <div>
-              <CardTitle>광고주 목록</CardTitle>
-              <p className="text-sm text-gray-600 mt-1">총 {filteredClients.length}개의 광고주가 등록되어 있습니다</p>
+              <CardTitle className="text-lg md:text-xl">광고주 목록</CardTitle>
+              <p className="text-xs sm:text-sm text-gray-600 mt-1">총 {filteredClients.length}개의 광고주가 등록되어 있습니다</p>
             </div>
-            <Badge variant="outline" className="text-blue-600 border-blue-200">
+            <Badge variant="outline" className="text-blue-600 border-blue-200 w-fit">
               {filteredClients.length}개
             </Badge>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="rounded-lg border border-gray-200 overflow-hidden">
+          {/* 데스크톱 테이블 */}
+          <div className="hidden md:block rounded-lg border border-gray-200 overflow-hidden">
             <Table>
               <TableHeader className="bg-gray-50">
                 <TableRow>
@@ -693,6 +705,79 @@ export default function ClientsPage() {
                 ))}
               </TableBody>
             </Table>
+          </div>
+
+          {/* 모바일 카드 */}
+          <div className="block md:hidden space-y-3">
+            {filteredClients.map((client) => (
+              <div key={client.id} className="border border-gray-200 rounded-lg p-4 space-y-3 hover:border-gray-300 transition-colors">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-medium text-gray-900 text-sm truncate">{client.storeName}</h3>
+                    <p className="text-xs text-gray-600 mt-1">사업자: {client.businessNumber}</p>
+                    <p className="text-xs text-gray-600">연락처: {client.ownerPhone}</p>
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" className="flex-shrink-0">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem>
+                        <Eye className="h-4 w-4 mr-2" />
+                        상세보기
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => openEditDialog(client)}>
+                        <Edit className="h-4 w-4 mr-2" />
+                        수정
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleDelete(client.id)} className="text-red-600">
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        삭제
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+                
+                <div className="flex flex-wrap items-center gap-1">
+                  {client.platforms.slice(0, 3).map((platform) => (
+                    <Badge key={platform} variant="secondary" className="text-xs">
+                      {platform}
+                    </Badge>
+                  ))}
+                  {client.platforms.length > 3 && (
+                    <Badge variant="outline" className="text-xs">
+                      +{client.platforms.length - 3}
+                    </Badge>
+                  )}
+                  {client.platforms.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleViewPlatforms(client.id, client.storeName)}
+                      className="h-6 px-2 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 ml-1"
+                    >
+                      <Info className="h-3 w-3 mr-1" />
+                      정보보기
+                    </Button>
+                  )}
+                </div>
+                
+                <div className="flex items-center justify-between text-xs">
+                  <Badge variant="outline" className="text-xs">{client.agency}</Badge>
+                  <span className="text-gray-500">{client.registeredAt}</span>
+                </div>
+              </div>
+            ))}
+            
+            {filteredClients.length === 0 && (
+              <div className="text-center py-8">
+                <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600">등록된 광고주가 없습니다.</p>
+                <p className="text-sm text-gray-500 mt-1">새 광고주를 등록해보세요!</p>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

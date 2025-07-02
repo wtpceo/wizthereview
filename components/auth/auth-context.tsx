@@ -29,7 +29,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('✅ 환경 변수 OK:', supabaseUrl.substring(0, 30) + '...')
 
       console.log('🔍 2단계: 인증된 사용자 확인 중...')
-      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
+      
+      // 타임아웃을 추가해서 무한 대기 방지
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('인증 확인 타임아웃')), 10000) // 10초 타임아웃
+      })
+      
+      const authPromise = supabase.auth.getUser()
+      
+      const { data: { user: authUser }, error: authError } = await Promise.race([authPromise, timeoutPromise]) as any
       
       console.log('📊 인증 사용자 확인 결과:', {
         hasUser: !!authUser,
@@ -53,7 +61,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // 사용자 프로필 조회
       console.log('🔍 3단계: 프로필 조회 중...', authUser.id)
-      const { data: profile, error: profileError } = await supabase
+      console.log('🔍 현재 인증 상태:', {
+        authUserId: authUser.id,
+        authUserEmail: authUser.email,
+        authRole: authUser.role
+      })
+      
+      const { data: profileData, error: profileError } = await supabase
         .from('user_profiles')
         .select(`
           id,
@@ -73,12 +87,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .single()
 
       console.log('📊 프로필 조회 결과:', {
-        hasProfile: !!profile,
+        hasProfile: !!profileData,
         hasError: !!profileError,
         errorMessage: profileError?.message,
         errorCode: profileError?.code,
         errorDetails: profileError?.details
       })
+
+      let profile = profileData
 
       if (profileError) {
         console.error('❌ 프로필 조회 실패:', {
@@ -87,8 +103,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           details: profileError.details,
           hint: profileError.hint
         })
-        setUser(null)
-        return
+        
+        // 프로필이 없는 경우 기본 프로필 생성 시도
+        if (profileError.code === 'PGRST116') { // No rows returned
+          console.log('🔧 프로필이 없음 - 기본 프로필 생성 시도...')
+          try {
+            const { data: newProfile, error: createError } = await supabase
+              .from('user_profiles')
+              .insert([{
+                id: authUser.id,
+                email: authUser.email,
+                full_name: authUser.email,
+                role: 'agency_staff',
+                is_active: true
+              }])
+              .select()
+              .single()
+            
+            if (createError) {
+              console.error('❌ 기본 프로필 생성 실패:', createError)
+              setUser(null)
+              return
+            }
+            
+            console.log('✅ 기본 프로필 생성 성공')
+            profile = newProfile
+          } catch (error) {
+            console.error('💥 프로필 생성 예외:', error)
+            setUser(null)
+            return
+          }
+        } else {
+          setUser(null)
+          return
+        }
       }
       
       if (!profile) {

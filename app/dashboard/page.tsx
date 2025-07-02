@@ -165,56 +165,58 @@ export default function DashboardPage() {
   ]
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 md:space-y-8">
       {/* 헤더 */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">대시보드</h1>
-          <div className="flex items-center gap-2 mt-1">
-            <p className="text-gray-600">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">대시보드</h1>
+          <div className="flex flex-col md:flex-row md:items-center gap-2 mt-1">
+            <p className="text-sm md:text-base text-gray-600">
               {isSuperAdmin ? '전체 시스템 관리자' : user?.agency_name ? `${user.agency_name} 관리자` : '광고주 현황을 한눈에 확인하세요'}
             </p>
             {user?.role && (
-              <Badge variant={isSuperAdmin ? "default" : "secondary"}>
+              <Badge variant={isSuperAdmin ? "default" : "secondary"} className="w-fit">
                 {user.role === 'super_admin' ? '슈퍼 관리자' : 
                  user.role === 'agency_admin' ? '대행사 관리자' : '대행사 직원'}
               </Badge>
             )}
           </div>
         </div>
-        <div className="flex space-x-3">
-          <Button variant="outline">
-            <Calendar className="h-4 w-4 mr-2" />
-            기간 설정
+        <div className="flex flex-col sm:flex-row gap-2 sm:space-x-3">
+          <Button variant="outline" size="sm" className="sm:size-default">
+            <Calendar className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">기간 설정</span>
+            <span className="sm:hidden">기간</span>
           </Button>
-          <Button>
-            <TrendingUp className="h-4 w-4 mr-2" />
-            리포트 생성
+          <Button size="sm" className="sm:size-default">
+            <TrendingUp className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">리포트 생성</span>
+            <span className="sm:hidden">리포트</span>
           </Button>
         </div>
       </div>
 
       {/* 통계 카드 */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         {statsCards.map((stat) => (
           <Card key={stat.title} className="relative overflow-hidden hover:shadow-lg transition-shadow duration-200">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">{stat.title}</CardTitle>
-              <div className="p-2 bg-blue-50 rounded-lg">
-                <stat.icon className="h-4 w-4 text-blue-600" />
+              <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 truncate">{stat.title}</CardTitle>
+              <div className="p-1.5 sm:p-2 bg-blue-50 rounded-lg flex-shrink-0">
+                <stat.icon className="h-3 w-3 sm:h-4 sm:w-4 text-blue-600" />
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
+            <CardContent className="pt-0">
+              <div className="text-lg sm:text-2xl font-bold text-gray-900">{stat.value}</div>
               {stat.change && (
-                <div className="flex items-center mt-2">
+                <div className="flex items-center mt-1 sm:mt-2">
                   {stat.changeType === "positive" ? (
-                    <ArrowUpRight className="h-4 w-4 text-green-600" />
+                    <ArrowUpRight className="h-3 w-3 sm:h-4 sm:w-4 text-green-600 flex-shrink-0" />
                   ) : stat.changeType === "negative" ? (
-                    <ArrowDownRight className="h-4 w-4 text-red-600" />
+                    <ArrowDownRight className="h-3 w-3 sm:h-4 sm:w-4 text-red-600 flex-shrink-0" />
                   ) : null}
                   <span
-                    className={`text-sm font-medium ml-1 ${
+                    className={`text-xs sm:text-sm font-medium ml-1 ${
                       stat.changeType === "positive" 
                         ? "text-green-600" 
                         : stat.changeType === "negative" 
@@ -224,11 +226,11 @@ export default function DashboardPage() {
                   >
                     {stat.change}
                   </span>
-                  <span className="text-sm text-gray-500 ml-1">{stat.description}</span>
+                  <span className="text-xs sm:text-sm text-gray-500 ml-1 hidden sm:inline">{stat.description}</span>
                 </div>
               )}
               {!stat.change && (
-                <p className="text-sm text-gray-500 mt-2">{stat.description}</p>
+                <p className="text-xs sm:text-sm text-gray-500 mt-1 sm:mt-2">{stat.description}</p>
               )}
             </CardContent>
           </Card>
@@ -237,9 +239,9 @@ export default function DashboardPage() {
 
       {/* 최근 등록된 광고주 */}
       <Card className="hover:shadow-lg transition-shadow duration-200">
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
           <div>
-            <CardTitle>최근 등록된 광고주</CardTitle>
+            <CardTitle className="text-lg sm:text-xl">최근 등록된 광고주</CardTitle>
             <p className="text-sm text-gray-600 mt-1">최근 활동 현황을 확인하세요</p>
           </div>
           <Button variant="outline" size="sm">
@@ -248,36 +250,36 @@ export default function DashboardPage() {
         </CardHeader>
         <CardContent>
           {recentClients.length > 0 ? (
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               {recentClients.map((client) => (
                 <div
                   key={client.id}
-                  className="flex items-center justify-between p-4 rounded-lg border border-gray-100 hover:border-gray-200 hover:bg-gray-50 transition-all duration-200"
+                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4 rounded-lg border border-gray-100 hover:border-gray-200 hover:bg-gray-50 transition-all duration-200 space-y-3 sm:space-y-0"
                 >
-                  <div className="flex items-center space-x-4">
-                    <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                      <Building2 className="h-5 w-5 text-white" />
+                  <div className="flex items-center space-x-3 sm:space-x-4">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Building2 className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                     </div>
-                    <div>
-                      <p className="font-medium text-gray-900">{client.storeName}</p>
-                      <p className="text-sm text-gray-600">사업자번호: {client.businessNumber}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-gray-900 text-sm sm:text-base truncate">{client.storeName}</p>
+                      <p className="text-xs sm:text-sm text-gray-600 truncate">사업자번호: {client.businessNumber}</p>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-4">
-                    <div className="text-right">
-                      <p className="text-sm font-medium text-gray-900">{client.platforms.length}개 플랫폼</p>
-                      <p className="text-sm text-gray-600">{client.registeredAt}</p>
+                  <div className="flex items-center justify-between sm:justify-end sm:space-x-4">
+                    <div className="text-left sm:text-right">
+                      <p className="text-xs sm:text-sm font-medium text-gray-900">{client.platforms.length}개 플랫폼</p>
+                      <p className="text-xs sm:text-sm text-gray-600">{client.registeredAt}</p>
                     </div>
-                    <Badge variant="default">활성</Badge>
+                    <Badge variant="default" className="text-xs">활성</Badge>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="text-center py-8">
-              <Building2 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600">아직 등록된 광고주가 없습니다.</p>
-              <p className="text-sm text-gray-500 mt-1">첫 번째 광고주를 등록해보세요!</p>
+            <div className="text-center py-6 sm:py-8">
+              <Building2 className="h-10 w-10 sm:h-12 sm:w-12 text-gray-400 mx-auto mb-3 sm:mb-4" />
+              <p className="text-gray-600 text-sm sm:text-base">아직 등록된 광고주가 없습니다.</p>
+              <p className="text-xs sm:text-sm text-gray-500 mt-1">첫 번째 광고주를 등록해보세요!</p>
             </div>
           )}
         </CardContent>
