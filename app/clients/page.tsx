@@ -252,15 +252,59 @@ export default function ClientsPage() {
     setIsDialogOpen(true)
   }
 
-  const openEditDialog = (client: Client) => {
-    setFormData({
-      storeName: client.storeName,
-      businessNumber: client.businessNumber,
-      ownerPhone: client.ownerPhone,
-      memo: client.memo || "",
-    })
-    setEditingClient(client)
-    setIsDialogOpen(true)
+  const openEditDialog = async (client: Client) => {
+    try {
+      console.log('📝 수정 모드: 기존 플랫폼 정보 로딩 중...', client.id)
+      
+      // 기본 정보 설정
+      setFormData({
+        storeName: client.storeName,
+        businessNumber: client.businessNumber,
+        ownerPhone: client.ownerPhone,
+        memo: client.memo || "",
+      })
+      setEditingClient(client)
+      
+      // 기존 플랫폼 정보 불러오기
+      const { data: existingPlatforms, error } = await getClientPlatforms(client.id)
+      
+      if (error) {
+        console.error('❌ 기존 플랫폼 정보 로딩 실패:', error)
+        console.warn('⚠️ 기존 플랫폼 정보를 불러올 수 없어서 빈 상태로 시작합니다.')
+        // 에러가 있어도 기본 빈 플랫폼으로 시작
+        setPlatforms([{ id: "1", platform: "", platformId: "", platformPassword: "", shopId: "" }])
+      } else if (existingPlatforms && existingPlatforms.length > 0) {
+        console.log('✅ 기존 플랫폼 정보 로딩 성공:', existingPlatforms.length + '개')
+        
+        // 기존 플랫폼 정보를 폼 형태로 변환
+        const platformsForForm = existingPlatforms.map((platform: any, index: number) => ({
+          id: (Date.now() + index).toString(), // 고유 ID 생성
+          platform: platform.platform_name || "",
+          platformId: platform.platform_id || "",
+          platformPassword: platform.platform_password || "",
+          shopId: platform.shop_id || ""
+        }))
+        
+        setPlatforms(platformsForForm)
+        console.log('📋 플랫폼 정보 폼에 설정 완료')
+      } else {
+        console.log('ℹ️ 기존 플랫폼 정보 없음 - 빈 상태로 시작')
+        // 기존 플랫폼 정보가 없으면 빈 플랫폼 하나로 시작
+        setPlatforms([{ id: "1", platform: "", platformId: "", platformPassword: "", shopId: "" }])
+      }
+      
+      // 다이얼로그 열기
+      setIsDialogOpen(true)
+      console.log('🎉 수정 다이얼로그 준비 완료')
+      
+    } catch (error) {
+      console.error('💥 수정 다이얼로그 준비 중 오류:', error)
+      alert('❌ 수정 정보를 불러오는 중 오류가 발생했습니다.')
+      
+      // 오류가 발생해도 기본 정보로 다이얼로그 열기
+      setPlatforms([{ id: "1", platform: "", platformId: "", platformPassword: "", shopId: "" }])
+      setIsDialogOpen(true)
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -310,15 +354,21 @@ export default function ClientsPage() {
           return
         }
 
-        // 플랫폼 정보 업데이트
-        if (platformData.length > 0) {
-          const { error: platformError } = await updateClientPlatforms(editingClient.id, platformData)
-          if (platformError) {
-            console.error('❌ 플랫폼 정보 수정 실패:', platformError)
-            alert('❌ 플랫폼 정보 수정에 실패했습니다.')
-            return
+        // 플랫폼 정보 업데이트 (빈 배열이어도 기존 플랫폼 삭제를 위해 항상 실행)
+        console.log('🔧 플랫폼 정보 업데이트 중...', platformData.length + '개')
+        const { error: platformError } = await updateClientPlatforms(editingClient.id, platformData)
+        if (platformError) {
+          console.error('❌ 플랫폼 정보 수정 실패:', platformError)
+          let platformErrorMessage = '플랫폼 정보 수정에 실패했습니다.'
+          if (typeof platformError === 'string') {
+            platformErrorMessage = platformError
+          } else if (platformError && typeof platformError === 'object' && 'message' in platformError) {
+            platformErrorMessage = (platformError as any).message
           }
+          alert(`❌ ${platformErrorMessage}`)
+          return
         }
+        console.log('✅ 플랫폼 정보 업데이트 완료')
 
         console.log('✅ 광고주 정보 수정 성공')
         alert('✅ 광고주 정보가 성공적으로 수정되었습니다!')

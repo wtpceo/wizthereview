@@ -38,6 +38,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       console.log('🔍 2단계: 인증된 사용자 확인 중...')
       
+      // 프로덕션 보안 강화: 세션 유효성 엄격 확인
+      const isProduction = process.env.NODE_ENV === 'production'
+      console.log('🛡️ 환경:', isProduction ? 'PRODUCTION (보안 강화)' : 'DEVELOPMENT')
+      
       // 타임아웃을 추가해서 무한 대기 방지
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error('인증 확인 타임아웃')), 8000) // 8초로 단축
@@ -52,11 +56,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         userId: authUser?.id,
         userEmail: authUser?.email,
         hasError: !!authError,
-        errorMessage: authError?.message
+        errorMessage: authError?.message,
+        isProduction
       })
       
       if (authError) {
         console.error('❌ 인증 확인 오류:', authError)
+        
+        // 프로덕션에서는 인증 오류 시 더 엄격하게 처리
+        if (isProduction) {
+          console.warn('🛡️ 프로덕션에서 인증 오류 감지 - 세션 완전 정리')
+          setUser(null)
+          setLoading(false)
+          setInitialized(true)
+          setAuthChecked(true)
+          return
+        }
         
         // 인증 오류 시 재시도 (최대 2회)
         if (retryCount < 2 && authError.message !== '인증 확인 타임아웃') {
@@ -79,6 +94,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setInitialized(true)
         setAuthChecked(true)
         return
+      }
+
+      // 프로덕션에서 추가 세션 검증
+      if (isProduction) {
+        console.log('🛡️ 프로덕션 세션 추가 검증 중...')
+        
+        // 세션 만료 시간 확인
+        const session = await supabase.auth.getSession()
+        if (session.error || !session.data.session) {
+          console.warn('🛡️ 프로덕션에서 유효하지 않은 세션 감지 - 로그아웃 처리')
+          setUser(null)
+          setLoading(false)
+          setInitialized(true)
+          setAuthChecked(true)
+          return
+        }
+        
+        // 세션 만료 시간 체크
+        const now = new Date().getTime() / 1000
+        const expiresAt = session.data.session.expires_at || 0
+        if (expiresAt < now) {
+          console.warn('🛡️ 프로덕션에서 만료된 세션 감지 - 로그아웃 처리')
+          setUser(null)
+          setLoading(false)
+          setInitialized(true)
+          setAuthChecked(true)
+          return
+        }
+        
+        console.log('✅ 프로덕션 세션 검증 통과')
       }
 
       // 기존 사용자와 동일한지 확인 (불필요한 업데이트 방지)
@@ -305,7 +350,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log('🚪 로그아웃 시작...')
       
-      // Supabase 세션 종료
+      // 1. Supabase 세션 종료
       const { error } = await supabase.auth.signOut()
       if (error) {
         console.error('❌ Supabase 로그아웃 오류:', error)
@@ -313,19 +358,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log('✅ Supabase 로그아웃 성공')
       }
 
-      // 사용자 상태 초기화
+      // 2. 사용자 상태 초기화
       setUser(null)
       setLoading(false)
       setInitialized(true)
       setAuthChecked(true)
       
-      // 로컬 스토리지 정리 (선택적)
+      // 3. 브라우저 스토리지 완전 정리 (보안 강화)
       if (typeof window !== 'undefined') {
-        localStorage.removeItem('supabase.auth.token')
-        sessionStorage.clear()
+        try {
+          // localStorage 완전 정리
+          const keysToRemove = []
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i)
+            if (key && (key.includes('supabase') || key.includes('auth') || key.includes('session'))) {
+              keysToRemove.push(key)
+            }
+          }
+          keysToRemove.forEach(key => localStorage.removeItem(key))
+          
+          // sessionStorage 완전 정리
+          sessionStorage.clear()
+          
+          // 쿠키 정리 (Supabase 관련)
+          document.cookie.split(";").forEach(cookie => {
+            const eqPos = cookie.indexOf("=")
+            const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim()
+            if (name.includes('supabase') || name.includes('sb-') || name.includes('auth')) {
+              document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname}`
+              document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`
+            }
+          })
+          
+          console.log('✅ 브라우저 스토리지 완전 정리 완료')
+        } catch (cleanupError) {
+          console.warn('⚠️ 스토리지 정리 중 오류 (무시):', cleanupError)
+        }
       }
       
-      console.log('✅ 로그아웃 완료')
+      console.log('✅ 완전 로그아웃 완료')
     } catch (error) {
       console.error('❌ 로그아웃 중 오류:', error)
       // 오류가 발생해도 사용자 상태는 초기화

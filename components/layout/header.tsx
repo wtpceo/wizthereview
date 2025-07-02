@@ -30,20 +30,44 @@ export function Header({ onMobileMenuToggle, isMobileMenuOpen }: HeaderProps) {
   const handleSignOut = async () => {
     try {
       console.log('🔄 로그아웃 처리 시작...')
+      
+      // 긴급 세션 정리
+      const isProduction = process.env.NODE_ENV === 'production'
+      if (isProduction) {
+        console.log('🛡️ 프로덕션 긴급 세션 정리 중...')
+      }
+      
       await signOut()
       
-      // 로그아웃 후 로그인 페이지로 리다이렉트
-      router.push('/login')
-      
-      // 페이지 새로고침으로 확실히 세션 정리
-      setTimeout(() => {
-        window.location.href = '/login'
-      }, 100)
-      
       console.log('✅ 로그아웃 처리 완료')
+      
+      // 확실한 페이지 이동과 새로고침
+      window.location.href = '/login'
+      
     } catch (error) {
       console.error('❌ 로그아웃 처리 오류:', error)
-      // 오류가 발생해도 로그인 페이지로 리다이렉트
+      
+      // 긴급 상황: 강제로 모든 세션 정리 후 이동
+      console.log('🚨 긴급 세션 정리 실행...')
+      if (typeof window !== 'undefined') {
+        // 모든 스토리지 완전 정리
+        try {
+          localStorage.clear()
+          sessionStorage.clear()
+          
+          // 모든 쿠키 삭제
+          document.cookie.split(";").forEach(cookie => {
+            const eqPos = cookie.indexOf("=")
+            const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim()
+            document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname}`
+            document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`
+          })
+        } catch (cleanupError) {
+          console.warn('⚠️ 긴급 정리 중 오류 (무시):', cleanupError)
+        }
+      }
+      
+      // 강제 페이지 이동
       window.location.href = '/login'
     }
   }
