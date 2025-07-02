@@ -1,9 +1,18 @@
 import { createClient } from '@supabase/supabase-js'
 
-// 환경 변수 확인 및 에러 처리
+// 환경 변수 확인 및 에러 처리 (빌드 시점에서 안전하게 처리)
 function getSupabaseConfig() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  
+  // 빌드 시점에서는 에러를 던지지 않고 기본값 반환
+  if (typeof window === 'undefined' && (!supabaseUrl || !supabaseAnonKey)) {
+    console.warn('⚠️ 환경 변수가 빌드 시점에 로드되지 않음 - 런타임에서 재시도')
+    return { 
+      supabaseUrl: supabaseUrl || 'https://placeholder.supabase.co', 
+      supabaseAnonKey: supabaseAnonKey || 'placeholder-key' 
+    }
+  }
   
   if (!supabaseUrl) {
     console.error('NEXT_PUBLIC_SUPABASE_URL is not defined')
@@ -15,12 +24,12 @@ function getSupabaseConfig() {
     throw new Error('Supabase ANON KEY가 설정되지 않았습니다. .env.local 파일을 확인해주세요.')
   }
   
-  // URL과 키의 유효성 검사
-  if (!supabaseUrl.startsWith('https://')) {
+  // URL과 키의 유효성 검사 (placeholder가 아닐 때만)
+  if (supabaseUrl !== 'https://placeholder.supabase.co' && !supabaseUrl.startsWith('https://')) {
     throw new Error('Supabase URL 형식이 올바르지 않습니다.')
   }
   
-  if (!supabaseAnonKey.startsWith('eyJ')) {
+  if (supabaseAnonKey !== 'placeholder-key' && !supabaseAnonKey.startsWith('eyJ')) {
     throw new Error('Supabase API 키 형식이 올바르지 않습니다.')
   }
   
