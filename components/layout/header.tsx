@@ -11,8 +11,32 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
+import { useAuth } from "@/components/auth/auth-context"
+import { useRouter } from "next/navigation"
 
 export function Header() {
+  const { user, signOut } = useAuth()
+  const router = useRouter()
+
+  const handleSignOut = async () => {
+    await signOut()
+    router.push('/login')
+  }
+
+  // 역할 한국어 변환
+  const getRoleText = (role: string) => {
+    switch (role) {
+      case 'super_admin':
+        return '슈퍼 관리자'
+      case 'agency_admin':
+        return '대행사 관리자'
+      case 'agency_staff':
+        return '대행사 직원'
+      default:
+        return '사용자'
+    }
+  }
+
   return (
     <header className="flex h-16 items-center justify-between border-b bg-white/80 backdrop-blur-sm px-6 sticky top-0 z-40">
       <div className="flex items-center space-x-4 flex-1">
@@ -41,8 +65,12 @@ export function Header() {
                 <User className="h-4 w-4 text-white" />
               </div>
               <div className="text-left hidden sm:block">
-                <p className="text-sm font-medium">ABC 광고대행사</p>
-                <p className="text-xs text-gray-500">관리자</p>
+                <p className="text-sm font-medium">
+                  {user?.full_name || '사용자'}
+                </p>
+                <p className="text-xs text-gray-500">
+                  {user?.role ? getRoleText(user.role) : '로딩 중...'}
+                </p>
               </div>
             </Button>
           </DropdownMenuTrigger>
@@ -56,7 +84,9 @@ export function Header() {
               알림 설정
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-red-600">로그아웃</DropdownMenuItem>
+            <DropdownMenuItem className="text-red-600" onClick={handleSignOut}>
+              로그아웃
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

@@ -6,11 +6,7 @@ import { Building2, Users, TrendingUp, Calendar, ArrowUpRight, ArrowDownRight } 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { getDashboardStats, getClients } from "@/lib/database"
-
-// 임시로 현재 로그인한 대행사 정보 (실제로는 로그인 시스템에서 가져올 데이터)
-const currentAgency = "ABC 광고대행사"
-const currentAgencyId = 1 // 실제로는 로그인한 사용자의 대행사 ID
-const isAdmin = false // 관리자 여부
+import { useAuth, usePermission } from "@/components/auth/auth-context"
 
 interface DashboardStats {
   totalClients: number
@@ -31,6 +27,8 @@ interface Client {
 }
 
 export default function DashboardPage() {
+  const { user, loading: authLoading } = useAuth()
+  const { isSuperAdmin, agencyId } = usePermission()
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [recentClients, setRecentClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
@@ -38,18 +36,23 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function loadDashboardData() {
+      // 인증 정보가 아직 로딩 중이면 대기
+      if (authLoading || !user) {
+        return
+      }
+
       try {
         setLoading(true)
         setError(null)
 
-        // 통계 데이터 로드
-        const statsResult = await getDashboardStats(isAdmin ? undefined : currentAgencyId)
+        // 통계 데이터 로드 (슈퍼 관리자는 모든 데이터, 아니면 자기 대행사 데이터만)
+        const statsResult = await getDashboardStats(isSuperAdmin ? undefined : agencyId || undefined)
         if (statsResult.error) {
           throw new Error('통계 데이터를 불러오는데 실패했습니다.')
         }
 
         // 최근 클라이언트 데이터 로드
-        const clientsResult = await getClients(isAdmin ? undefined : currentAgencyId)
+        const clientsResult = await getClients(isSuperAdmin ? undefined : agencyId || undefined)
         if (clientsResult.error) {
           throw new Error('클라이언트 데이터를 불러오는데 실패했습니다.')
         }
@@ -65,16 +68,18 @@ export default function DashboardPage() {
     }
 
     loadDashboardData()
-  }, [])
+  }, [authLoading, user, isSuperAdmin, agencyId])
 
-  // 로딩 상태
-  if (loading) {
+  // 로딩 상태 (인증 정보 로딩 중이거나 데이터 로딩 중)
+  if (authLoading || loading || !user) {
     return (
       <div className="space-y-8">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">대시보드</h1>
-            <p className="text-gray-600 mt-1">데이터를 불러오고 있습니다...</p>
+            <p className="text-gray-600 mt-1">
+              {authLoading || !user ? '사용자 정보를 불러오는 중...' : '데이터를 불러오고 있습니다...'}
+            </p>
           </div>
         </div>
         
@@ -165,7 +170,17 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">대시보드</h1>
-          <p className="text-gray-600 mt-1">광고주 현황을 한눈에 확인하세요</p>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-gray-600">
+              {isSuperAdmin ? '전체 시스템 관리자' : user?.agency_name ? `${user.agency_name} 관리자` : '광고주 현황을 한눈에 확인하세요'}
+            </p>
+            {user?.role && (
+              <Badge variant={isSuperAdmin ? "default" : "secondary"}>
+                {user.role === 'super_admin' ? '슈퍼 관리자' : 
+                 user.role === 'agency_admin' ? '대행사 관리자' : '대행사 직원'}
+              </Badge>
+            )}
+          </div>
         </div>
         <div className="flex space-x-3">
           <Button variant="outline">

@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Search, Edit, Trash2, Eye, Plus, X, Download, Filter, MoreHorizontal, Info } from "lucide-react"
+import { Search, Edit, Trash2, Eye, Plus, X, Download, Filter, MoreHorizontal, Info, EyeOff, Copy, Check } from "lucide-react"
 import { downloadClientsExcel, downloadClientsWithPlatformsExcel } from "@/lib/excel-utils"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { getClientPlatforms, getClients } from "@/lib/database"
@@ -94,6 +94,10 @@ export default function ClientsPage() {
   
   // 엑셀 다운로드 로딩 상태
   const [isDownloadingExcel, setIsDownloadingExcel] = useState(false)
+  
+  // 비밀번호 표시 상태 (플랫폼 ID별로 관리)
+  const [showPasswords, setShowPasswords] = useState<{[key: number]: boolean}>({})
+  const [copiedItems, setCopiedItems] = useState<{[key: string]: boolean}>({})
 
   // 폼 상태
   const [formData, setFormData] = useState({
@@ -256,6 +260,8 @@ export default function ClientsPage() {
     setIsLoadingPlatforms(true)
     setSelectedClientName(clientName)
     setIsPlatformModalOpen(true)
+    setShowPasswords({}) // 비밀번호 표시 상태 초기화
+    setCopiedItems({}) // 복사 상태 초기화
     
     try {
       const { data, error } = await getClientPlatforms(clientId)
@@ -270,6 +276,29 @@ export default function ClientsPage() {
       setSelectedClientPlatforms([])
     } finally {
       setIsLoadingPlatforms(false)
+    }
+  }
+
+  // 비밀번호 표시/숨김 토글
+  const togglePasswordVisibility = (platformId: number) => {
+    setShowPasswords(prev => ({
+      ...prev,
+      [platformId]: !prev[platformId]
+    }))
+  }
+
+  // 클립보드 복사 함수
+  const copyToClipboard = async (text: string, itemKey: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedItems(prev => ({ ...prev, [itemKey]: true }))
+      
+      // 2초 후 복사 상태 초기화
+      setTimeout(() => {
+        setCopiedItems(prev => ({ ...prev, [itemKey]: false }))
+      }, 2000)
+    } catch (error) {
+      console.error('클립보드 복사 실패:', error)
     }
   }
 
@@ -610,75 +639,144 @@ export default function ClientsPage() {
       <Dialog open={isPlatformModalOpen} onOpenChange={setIsPlatformModalOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-xl">
-              {selectedClientName} - 플랫폼 정보
+            <DialogTitle className="text-xl font-semibold">
+              플랫폼 정보 - {selectedClientName}
             </DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4">
             {isLoadingPlatforms ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="text-gray-500">플랫폼 정보를 불러오는 중...</div>
+              <div className="flex justify-center items-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <span className="ml-2">플랫폼 정보를 불러오는 중...</span>
               </div>
-            ) : selectedClientPlatforms.length === 0 ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="text-gray-500">등록된 플랫폼 정보가 없습니다.</div>
-              </div>
-            ) : (
-              <div className="grid gap-4">
-                {selectedClientPlatforms.map((platform, index) => (
-                  <div
-                    key={platform.id}
-                    className="border border-gray-200 rounded-xl p-6 space-y-4 hover:border-gray-300 transition-colors"
-                  >
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-semibold text-gray-900 flex items-center">
-                        <Badge variant="secondary" className="mr-2">
-                          {index + 1}
-                        </Badge>
-                        {platform.platform_name}
-                      </h4>
-                      <div className="text-xs text-gray-500">
-                        등록일: {new Date(platform.created_at).toLocaleDateString('ko-KR')}
+            ) : selectedClientPlatforms.length > 0 ? (
+              <div className="space-y-4">
+                <div className="text-sm text-gray-600 mb-4">
+                  총 {selectedClientPlatforms.length}개의 플랫폼이 등록되어 있습니다.
+                </div>
+                
+                <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-2">
+                  {selectedClientPlatforms.map((platform, index) => (
+                    <div key={platform.id} className="border border-gray-200 rounded-lg p-4 space-y-3 bg-gray-50">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-semibold text-lg text-gray-900">
+                          {platform.platform_name}
+                        </h3>
+                        <Badge variant="secondary">플랫폼 {index + 1}</Badge>
                       </div>
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium text-gray-700">플랫폼 아이디</Label>
-                        <div className="p-3 bg-gray-50 rounded-lg border">
-                          <span className="text-sm text-gray-900 font-mono">
-                            {platform.platform_id || '미입력'}
+                      
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium text-gray-600">플랫폼 아이디:</span>
+                          <div className="flex items-center gap-1">
+                            <span className="font-mono bg-white px-2 py-1 rounded border">
+                              {platform.platform_id || '-'}
+                            </span>
+                            {platform.platform_id && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => copyToClipboard(platform.platform_id, `platform_id_${platform.id}`)}
+                                className="p-1 h-6 w-6"
+                                title="복사"
+                              >
+                                {copiedItems[`platform_id_${platform.id}`] ? (
+                                  <Check className="h-3 w-3 text-green-600" />
+                                ) : (
+                                  <Copy className="h-3 w-3" />
+                                )}
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium text-gray-600">샵 아이디:</span>
+                          <div className="flex items-center gap-1">
+                            <span className="font-mono bg-white px-2 py-1 rounded border">
+                              {platform.shop_id || '-'}
+                            </span>
+                            {platform.shop_id && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => copyToClipboard(platform.shop_id, `shop_id_${platform.id}`)}
+                                className="p-1 h-6 w-6"
+                                title="복사"
+                              >
+                                {copiedItems[`shop_id_${platform.id}`] ? (
+                                  <Check className="h-3 w-3 text-green-600" />
+                                ) : (
+                                  <Copy className="h-3 w-3" />
+                                )}
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium text-gray-600">비밀번호:</span>
+                          <div className="flex items-center gap-1">
+                            <span className="font-mono bg-white px-2 py-1 rounded border">
+                              {platform.platform_password ? (
+                                showPasswords[platform.id] ? platform.platform_password : '••••••••'
+                              ) : '-'}
+                            </span>
+                            {platform.platform_password && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => togglePasswordVisibility(platform.id)}
+                                  className="p-1 h-6 w-6"
+                                  title={showPasswords[platform.id] ? "비밀번호 숨기기" : "비밀번호 보기"}
+                                >
+                                  {showPasswords[platform.id] ? (
+                                    <EyeOff className="h-3 w-3" />
+                                  ) : (
+                                    <Eye className="h-3 w-3" />
+                                  )}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => copyToClipboard(platform.platform_password, `password_${platform.id}`)}
+                                  className="p-1 h-6 w-6"
+                                  title="비밀번호 복사"
+                                >
+                                  {copiedItems[`password_${platform.id}`] ? (
+                                    <Check className="h-3 w-3 text-green-600" />
+                                  ) : (
+                                    <Copy className="h-3 w-3" />
+                                  )}
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div className="flex justify-between pt-2 border-t">
+                          <span className="font-medium text-gray-600">등록일:</span>
+                          <span className="text-gray-500">
+                            {new Date(platform.created_at).toLocaleDateString('ko-KR')}
                           </span>
                         </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium text-gray-700">샵 아이디</Label>
-                        <div className="p-3 bg-gray-50 rounded-lg border">
-                          <span className="text-sm text-gray-900 font-mono">
-                            {platform.shop_id || '미입력'}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium text-gray-700">플랫폼 비밀번호</Label>
-                        <div className="p-3 bg-gray-50 rounded-lg border">
-                          <span className="text-sm text-gray-900 font-mono">
-                            {platform.platform_password ? '••••••••' : '미입력'}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium text-gray-700">마지막 수정일</Label>
-                        <div className="p-3 bg-gray-50 rounded-lg border">
-                          <span className="text-sm text-gray-900">
+                        
+                        <div className="flex justify-between">
+                          <span className="font-medium text-gray-600">수정일:</span>
+                          <span className="text-gray-500">
                             {new Date(platform.updated_at).toLocaleDateString('ko-KR')}
                           </span>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                등록된 플랫폼 정보가 없습니다.
               </div>
             )}
           </div>

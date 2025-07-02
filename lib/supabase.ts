@@ -47,11 +47,33 @@ export const supabase = (() => {
 // 서버 사이드에서 사용할 Supabase 클라이언트 (Service Role Key 사용)
 let supabaseAdminClient: ReturnType<typeof createClient> | null = null
 
+// Service Role Key를 더 안전하게 가져오는 함수
+function getServiceRoleKey() {
+  // 여러 방법으로 환경 변수 접근 시도
+  const serviceRoleKey = 
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    (typeof window === 'undefined' && require('fs').existsSync('.env.local') ? 
+      require('fs').readFileSync('.env.local', 'utf8')
+        .split('\n')
+        .find((line: string) => line.startsWith('SUPABASE_SERVICE_ROLE_KEY='))
+        ?.split('=')[1]
+        ?.trim() : 
+      null)
+  
+  console.log('🔑 Service Role Key 로딩 상태:', {
+    fromProcessEnv: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+    length: serviceRoleKey?.length || 0,
+    exists: !!serviceRoleKey
+  })
+  
+  return serviceRoleKey
+}
+
 export const supabaseAdmin = (() => {
   if (!supabaseAdminClient) {
     try {
       const { supabaseUrl } = getSupabaseConfig()
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+      const serviceRoleKey = getServiceRoleKey()
       
       if (!serviceRoleKey) {
         console.warn('⚠️ SUPABASE_SERVICE_ROLE_KEY가 설정되지 않음 - 관리자 기능 제한')

@@ -37,6 +37,134 @@ export async function createAgency(agency: {
   }
 }
 
+// 대행사 전체 생성 프로세스 (대행사 + 계정 + 프로필)
+export async function createAgencyWithAccount(agencyData: {
+  name: string
+  email: string
+  phone: string
+  adminEmail: string
+  adminPassword: string
+  adminName: string
+}) {
+  try {
+    console.log('🏢 대행사 생성 프로세스 시작:', agencyData.name)
+
+    // 1단계: 대행사 정보 등록
+    console.log('📝 1단계: 대행사 정보 등록 중...')
+    const { data: agencyResult, error: agencyError } = await supabase
+      .from('agencies')
+      .insert([{
+        name: agencyData.name,
+        email: agencyData.email,
+        phone: agencyData.phone,
+        status: 'active'
+      }])
+      .select()
+      .single()
+
+    if (agencyError) {
+      console.error('❌ 대행사 등록 실패:', agencyError)
+      throw new Error(`대행사 등록 실패: ${agencyError.message}`)
+    }
+
+    console.log('✅ 대행사 등록 성공:', agencyResult)
+
+    // 2단계: 관리자 계정 생성 (supabaseAdmin 사용)
+    console.log('👤 2단계: 관리자 계정 생성 중...')
+    
+    // Service Role Key 확인
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    console.log('🔑 Service Role Key 상태:', {
+      exists: !!serviceRoleKey,
+      length: serviceRoleKey?.length,
+      prefix: serviceRoleKey?.substring(0, 20) + '...'
+    })
+    
+    // supabaseAdmin이 실제로 admin 권한을 가지고 있는지 확인
+    console.log('🛡️ supabaseAdmin 권한 확인...')
+    
+    console.log('📧 사용자 생성 요청:', {
+      email: agencyData.adminEmail,
+      email_confirm: true,
+      password_length: agencyData.adminPassword.length
+    })
+    
+    const { data: userResult, error: userError } = await supabaseAdmin.auth.admin.createUser({
+      email: agencyData.adminEmail,
+      password: agencyData.adminPassword,
+      email_confirm: true // 이메일 확인 건너뛰기
+    })
+
+    console.log('👤 사용자 생성 결과:', {
+      success: !!userResult.user,
+      userId: userResult.user?.id,
+      userEmail: userResult.user?.email,
+      errorMessage: userError?.message,
+      errorStatus: userError?.status,
+      fullError: userError
+    })
+
+    if (userError || !userResult.user) {
+      console.error('❌ 관리자 계정 생성 실패 - 상세 정보:', {
+        errorMessage: userError?.message,
+        errorCode: userError?.status,
+        errorDetails: userError,
+        serviceRoleKeyExists: !!serviceRoleKey,
+        supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL
+      })
+      
+      // 대행사 정보도 롤백
+      await supabase.from('agencies').delete().eq('id', agencyResult.id as number)
+      throw new Error(`관리자 계정 생성 실패: ${userError?.message || '사용자 생성 실패'}`)
+    }
+
+    console.log('✅ 관리자 계정 생성 성공:', userResult.user.id)
+
+    // 3단계: 사용자 프로필 생성
+    console.log('📋 3단계: 사용자 프로필 생성 중...')
+    const { data: profileResult, error: profileError } = await supabase
+      .from('user_profiles')
+      .insert([{
+        id: userResult.user.id,
+        email: agencyData.adminEmail,
+        full_name: agencyData.adminName,
+        role: 'agency_admin',
+        agency_id: agencyResult.id,
+        is_active: true
+      }])
+      .select()
+      .single()
+
+    if (profileError) {
+      console.error('❌ 프로필 생성 실패:', profileError)
+      // 롤백 작업
+      await supabaseAdmin.auth.admin.deleteUser(userResult.user.id)
+      await supabase.from('agencies').delete().eq('id', agencyResult.id as number)
+      throw new Error(`프로필 생성 실패: ${profileError.message}`)
+    }
+
+    console.log('✅ 프로필 생성 성공')
+    console.log('🎉 대행사 전체 생성 프로세스 완료!')
+
+    return {
+      success: true,
+      data: {
+        agency: agencyResult,
+        user: userResult.user,
+        profile: profileResult
+      },
+      error: null
+    }
+  } catch (error: any) {
+    console.error('💥 대행사 생성 프로세스 실패:', error)
+    return {
+      success: false,
+      data: null,
+      error: error.message || '알 수 없는 오류가 발생했습니다.'
+    }
+  }
+}
+
 // 광고주(클라이언트) 관련 함수들
 export async function getClients(agencyId?: number) {
   try {
@@ -370,4 +498,5 @@ export async function getDashboardStats(agencyId?: number) {
       error: error
     }
   }
-} 
+}
+
