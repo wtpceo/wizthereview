@@ -11,10 +11,16 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
+  const [initialized, setInitialized] = useState(false)
+  const [authChecked, setAuthChecked] = useState(false)
 
   // 현재 사용자 프로필 가져오기
-  const fetchUserProfile = async () => {
-    console.log('👤 사용자 프로필 조회 시작...')
+  const fetchUserProfile = async (skipLoading = false, retryCount = 0) => {
+    console.log('👤 사용자 프로필 조회 시작... (시도:', retryCount + 1, ')')
+    
+    if (!skipLoading && !authChecked) {
+      setLoading(true)
+    }
     
     try {
       // Supabase 클라이언트가 placeholder인지 확인
@@ -24,6 +30,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.warn('⚠️ Supabase 환경 변수가 설정되지 않음 - 인증 건너뛰기')
         setUser(null)
         setLoading(false)
+        setInitialized(true)
+        setAuthChecked(true)
         return
       }
       console.log('✅ 환경 변수 OK:', supabaseUrl.substring(0, 30) + '...')
@@ -32,7 +40,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // 타임아웃을 추가해서 무한 대기 방지
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('인증 확인 타임아웃')), 10000) // 10초 타임아웃
+        setTimeout(() => reject(new Error('인증 확인 타임아웃')), 8000) // 8초로 단축
       })
       
       const authPromise = supabase.auth.getUser()
@@ -49,23 +57,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (authError) {
         console.error('❌ 인증 확인 오류:', authError)
+        
+        // 인증 오류 시 재시도 (최대 2회)
+        if (retryCount < 2 && authError.message !== '인증 확인 타임아웃') {
+          console.log('🔄 인증 확인 재시도...')
+          setTimeout(() => fetchUserProfile(skipLoading, retryCount + 1), 1000)
+          return
+        }
+        
         setUser(null)
+        setLoading(false)
+        setInitialized(true)
+        setAuthChecked(true)
         return
       }
       
       if (!authUser) {
         console.log('ℹ️ 인증된 사용자 없음 (로그아웃 상태)')
         setUser(null)
+        setLoading(false)
+        setInitialized(true)
+        setAuthChecked(true)
+        return
+      }
+
+      // 기존 사용자와 동일한지 확인 (불필요한 업데이트 방지)
+      if (user && user.id === authUser.id && skipLoading) {
+        console.log('ℹ️ 동일한 사용자 - 프로필 조회 건너뛰기')
+        setLoading(false)
+        setInitialized(true)
+        setAuthChecked(true)
         return
       }
 
       // 사용자 프로필 조회
       console.log('🔍 3단계: 프로필 조회 중...', authUser.id)
-      console.log('🔍 현재 인증 상태:', {
-        authUserId: authUser.id,
-        authUserEmail: authUser.email,
-        authRole: authUser.role
-      })
       
       const { data: profileData, error: profileError } = await supabase
         .from('user_profiles')
@@ -90,8 +116,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         hasProfile: !!profileData,
         hasError: !!profileError,
         errorMessage: profileError?.message,
-        errorCode: profileError?.code,
-        errorDetails: profileError?.details
+        errorCode: profileError?.code
       })
 
       let profile = profileData
@@ -100,11 +125,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('❌ 프로필 조회 실패:', {
           message: profileError.message,
           code: profileError.code,
-          details: profileError.details,
-          hint: profileError.hint
+          details: profileError.details
         })
         
-        // 프로필이 없는 경우 기본 프로필 생성 시도
+        // 프로필이 없는 경우만 기본 프로필 생성 시도
         if (profileError.code === 'PGRST116') { // No rows returned
           console.log('🔧 프로필이 없음 - 기본 프로필 생성 시도...')
           try {
@@ -122,7 +146,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             
             if (createError) {
               console.error('❌ 기본 프로필 생성 실패:', createError)
-              setUser(null)
+              // 기존 사용자가 있다면 유지, 없다면 null로 설정
+              if (!user) {
+                setUser(null)
+              }
+              setLoading(false)
+              setInitialized(true)
+              setAuthChecked(true)
               return
             }
             
@@ -130,18 +160,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             profile = newProfile
           } catch (error) {
             console.error('💥 프로필 생성 예외:', error)
-            setUser(null)
+            // 기존 사용자가 있다면 유지
+            if (!user) {
+              setUser(null)
+            }
+            setLoading(false)
+            setInitialized(true)
+            setAuthChecked(true)
             return
           }
         } else {
-          setUser(null)
+          // 네트워크 오류 등의 경우 기존 사용자 상태 유지
+          console.warn('⚠️ 프로필 조회 실패 - 기존 상태 유지')
+          setLoading(false)
+          setInitialized(true)
+          setAuthChecked(true)
           return
         }
       }
       
       if (!profile) {
         console.error('❌ 프로필 데이터 없음')
-        setUser(null)
+        if (!user) {
+          setUser(null)
+        }
+        setLoading(false)
+        setInitialized(true)
+        setAuthChecked(true)
         return
       }
 
@@ -150,22 +195,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email: profile.email,
         full_name: profile.full_name,
         role: profile.role,
-        agency_id: profile.agency_id,
-        agencies: profile.agencies
+        agency_id: profile.agency_id
       })
 
-      // 마지막 로그인 시간 업데이트
-      console.log('🔍 4단계: 로그인 시간 업데이트...')
-      const { error: updateError } = await supabase
-        .from('user_profiles')
-        .update({ last_login: new Date().toISOString() })
-        .eq('id', authUser.id)
-
-      if (updateError) {
-        console.warn('⚠️ 로그인 시간 업데이트 실패:', updateError.message)
-        // 실패해도 계속 진행
-      } else {
-        console.log('✅ 로그인 시간 업데이트 성공')
+      // 마지막 로그인 시간 업데이트 (백그라운드에서 실행, 실패해도 무시)
+      if (!skipLoading) {
+        console.log('🔍 4단계: 로그인 시간 업데이트...')
+        // 백그라운드에서 비동기로 실행하고 에러는 무시
+        ;(async () => {
+          try {
+            const { error: updateError } = await supabase
+              .from('user_profiles')
+              .update({ last_login: new Date().toISOString() })
+              .eq('id', authUser.id)
+            
+            if (updateError) {
+              console.warn('⚠️ 로그인 시간 업데이트 실패:', updateError.message)
+            } else {
+              console.log('✅ 로그인 시간 업데이트 성공')
+            }
+          } catch (error) {
+            console.warn('⚠️ 로그인 시간 업데이트 중 예외 발생 (무시)')
+          }
+        })()
       }
 
       // 타입 안전하게 처리
@@ -187,9 +239,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       console.log('🎉 5단계: 사용자 상태 설정 완료')
       setUser(userData)
-    } catch (error) {
+      setLoading(false)
+      setInitialized(true)
+      setAuthChecked(true)
+    } catch (error: any) {
       console.error('💥 프로필 조회 예외 발생:', error)
-      setUser(null)
+      
+      // 네트워크 오류나 임시적 오류의 경우 기존 상태 유지
+      if (error?.message?.includes('타임아웃') || error?.message?.includes('network')) {
+        console.warn('⚠️ 네트워크 오류 - 기존 상태 유지')
+      } else if (!user) {
+        setUser(null)
+      }
+      
+      setLoading(false)
+      setInitialized(true)
+      setAuthChecked(true)
     }
   }
 
@@ -225,7 +290,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('✅ Supabase 인증 성공, 프로필 조회 시작...')
       
       // 로그인 성공 후 프로필 새로고침
-      await fetchUserProfile()
+      await fetchUserProfile(false, 0) // 처음부터 시작
       
       console.log('🎉 로그인 프로세스 완료!')
       return {}
@@ -250,6 +315,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // 사용자 상태 초기화
       setUser(null)
+      setLoading(false)
+      setInitialized(true)
+      setAuthChecked(true)
       
       // 로컬 스토리지 정리 (선택적)
       if (typeof window !== 'undefined') {
@@ -262,56 +330,100 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error('❌ 로그아웃 중 오류:', error)
       // 오류가 발생해도 사용자 상태는 초기화
       setUser(null)
+      setLoading(false)
+      setInitialized(true)
+      setAuthChecked(true)
     }
   }
 
   // 사용자 프로필 새로고침
   const refreshUser = async () => {
-    await fetchUserProfile()
+    console.log('🔄 사용자 프로필 새로고침 요청')
+    await fetchUserProfile(true, 0) // 로딩 상태 건너뛰기, 재시도 카운트 리셋
   }
 
   // 인증 상태 변화 감지
   useEffect(() => {
-    try {
-      // 환경 변수 확인
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-      if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
-        console.warn('⚠️ Supabase 환경 변수가 설정되지 않음 - 인증 리스너 건너뛰기')
-        setLoading(false)
-        return
-      }
-
-      // 초기 사용자 확인
-      fetchUserProfile()
-
-      // 인증 상태 변화 리스너
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(
-        async (event, session) => {
-          if (event === 'SIGNED_IN' && session) {
-            await fetchUserProfile()
-          } else if (event === 'SIGNED_OUT') {
-            setUser(null)
+    let mounted = true
+    let authListener: any = null
+    
+    const initAuth = async () => {
+      try {
+        // 환경 변수 확인
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+        if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
+          console.warn('⚠️ Supabase 환경 변수가 설정되지 않음 - 인증 리스너 건너뛰기')
+          if (mounted) {
+            setLoading(false)
+            setInitialized(true)
+            setAuthChecked(true)
           }
-          setLoading(false)
+          return
         }
-      )
 
-      return () => subscription.unsubscribe()
-    } catch (error) {
-      console.error('❌ 인증 리스너 설정 실패:', error)
-      setLoading(false)
+        // 초기 세션 확인 및 사용자 프로필 로드
+        console.log('🔄 초기 인증 상태 확인 중...')
+        await fetchUserProfile(false, 0)
+
+        // 인증 상태 변화 리스너 설정
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+          async (event, session) => {
+            console.log('🔄 인증 상태 변경:', event, !!session)
+            
+            if (!mounted) return
+            
+            if (event === 'SIGNED_IN' && session?.user) {
+              console.log('✅ 로그인 감지 - 프로필 새로고침')
+              await fetchUserProfile(true, 0)
+            } else if (event === 'SIGNED_OUT') {
+              console.log('🚪 로그아웃 감지 - 사용자 정보 초기화')
+              setUser(null)
+              setLoading(false)
+              setInitialized(true)
+              setAuthChecked(true)
+            } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+              console.log('🔄 토큰 갱신 감지 - 가벼운 확인만 수행')
+              // 토큰 갱신 시에는 전체 프로필을 다시 조회하지 않고 간단한 확인만
+              if (user && user.id === session.user.id) {
+                console.log('ℹ️ 동일한 사용자 토큰 갱신 - 상태 유지')
+              } else {
+                console.log('⚠️ 다른 사용자 토큰 - 프로필 새로고침')
+                await fetchUserProfile(true, 0)
+              }
+            }
+          }
+        )
+
+        authListener = subscription
+
+        // 컴포넌트 언마운트 시 구독 해제
+        return () => {
+          console.log('🧹 인증 리스너 정리')
+          subscription.unsubscribe()
+        }
+      } catch (error) {
+        console.error('❌ 인증 초기화 실패:', error)
+        if (mounted) {
+          setLoading(false)
+          setInitialized(true)
+          setAuthChecked(true)
+        }
+      }
     }
-  }, [])
 
-  // 로딩 완료 후 설정
-  useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 1000)
-    return () => clearTimeout(timer)
+    initAuth()
+
+    return () => {
+      mounted = false
+      if (authListener) {
+        authListener.unsubscribe()
+      }
+    }
   }, [])
 
   const value: AuthContextType = {
     user,
-    loading,
+    loading: loading && !authChecked, // authChecked 상태도 고려
     signIn,
     signOut,
     refreshUser,

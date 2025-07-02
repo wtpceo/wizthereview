@@ -53,7 +53,7 @@ interface Client {
 }
 
 export default function ClientsPage() {
-  const { user } = useAuth()
+  const { user, refreshUser } = useAuth()
   const router = useRouter()
   
   const [clients, setClients] = useState<Client[]>([])
@@ -116,9 +116,30 @@ export default function ClientsPage() {
 
   useEffect(() => {
     if (user) { // 사용자 정보가 로드된 후에만 실행
+      console.log('👤 사용자 정보 변경 감지 - 클라이언트 목록 새로고침')
       loadClients()
     }
   }, [user])
+
+  // 페이지 visibility 변화 감지 (다른 탭에서 돌아올 때)
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (!document.hidden && user) {
+        console.log('👁️ 페이지 재활성화 감지 - 데이터 새로고침')
+        try {
+          await refreshUser()
+          await loadClients()
+        } catch (error) {
+          console.warn('⚠️ 페이지 재활성화 시 새로고침 실패:', error)
+        }
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [user, refreshUser])
 
   const handleSearch = () => {
     let filtered = clients
@@ -252,7 +273,14 @@ export default function ClientsPage() {
 
         if (error) {
           console.error('❌ 광고주 수정 실패:', error)
-          alert('❌ 광고주 정보 수정에 실패했습니다.')
+          // 수정 실패 시 구체적인 메시지 표시
+          let errorMessage = '광고주 정보 수정에 실패했습니다.'
+          if (typeof error === 'string') {
+            errorMessage = error
+          } else if (error && typeof error === 'object' && 'message' in error) {
+            errorMessage = (error as any).message
+          }
+          alert(`❌ ${errorMessage}`)
           return
         }
 
@@ -272,7 +300,7 @@ export default function ClientsPage() {
         // 새 광고주 등록
         console.log('🆕 새 광고주 등록 중...')
         
-        const { data, error } = await createClient({
+        const result = await createClient({
           store_name: formData.storeName,
           business_number: formData.businessNumber,
           owner_phone: formData.ownerPhone,
@@ -281,26 +309,62 @@ export default function ClientsPage() {
           platforms: platformData
         })
 
-        if (error) {
-          console.error('❌ 광고주 등록 실패:', error)
-          alert('❌ 광고주 등록에 실패했습니다.')
+        if (result.error) {
+          console.error('❌ 광고주 등록 실패:', result.error)
+          
+          // 더 나은 에러 메시지 표시
+          let errorMessage = result.error
+          
+          // 특정 에러 케이스별 안내 메시지
+          if (result.error.includes('이미 등록된 업체')) {
+            errorMessage = `⚠️ ${result.error}\n\n다른 사업자번호를 입력하거나 기존 업체 정보를 확인해 주세요.`
+          } else if (result.error.includes('사업자번호') && result.error.includes('이미 등록')) {
+            errorMessage = `⚠️ ${result.error}\n\n※ 사업자번호는 중복 등록이 불가능합니다.`
+          } else if (result.error.includes('duplicate key')) {
+            errorMessage = '⚠️ 이미 등록된 정보가 있습니다. 입력한 내용을 다시 확인해 주세요.'
+          }
+          
+          alert(`❌ ${errorMessage}`)
           return
         }
 
-        console.log('✅ 광고주 등록 성공:', data)
-        alert('✅ 광고주가 성공적으로 등록되었습니다!')
+        console.log('✅ 광고주 등록 성공:', result.data)
+        alert(`✅ ${result.message || '광고주가 성공적으로 등록되었습니다!'}`)
       }
 
       // 성공 후 처리
       setIsDialogOpen(false)
       resetForm()
       
+      // 사용자 정보 새로고침 (인증 세션 동기화)
+      console.log('🔄 사용자 정보 새로고침 중...')
+      try {
+        await refreshUser()
+        console.log('✅ 사용자 정보 새로고침 완료')
+      } catch (error) {
+        console.warn('⚠️ 사용자 정보 새로고침 실패 (무시):', error)
+      }
+      
       // 클라이언트 목록 새로고침
       await loadClients()
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('💥 예상치 못한 오류:', error)
-      alert('❌ 예상치 못한 오류가 발생했습니다.')
+      
+      // 예상치 못한 오류 시에도 도움이 되는 메시지 제공
+      let errorMessage = '예상치 못한 오류가 발생했습니다.'
+      
+      if (error?.message) {
+        if (error.message.includes('network') || error.message.includes('fetch')) {
+          errorMessage = '네트워크 연결을 확인해 주세요.'
+        } else if (error.message.includes('permission') || error.message.includes('unauthorized')) {
+          errorMessage = '권한이 없습니다. 관리자에게 문의하세요.'
+        } else {
+          errorMessage = error.message
+        }
+      }
+      
+      alert(`❌ ${errorMessage}`)
     } finally {
       setIsSubmitting(false)
     }

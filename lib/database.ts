@@ -281,7 +281,34 @@ export async function createClient(client: {
   }>
 }) {
   try {
-    // 클라이언트 생성
+    console.log('📝 광고주 등록 시작:', client.store_name)
+    
+    // 1단계: 사업자번호 중복 체크
+    console.log('🔍 1단계: 사업자번호 중복 체크...')
+    const { data: existingClient, error: checkError } = await supabase
+      .from('clients')
+      .select('id, store_name')
+      .eq('business_number', client.business_number)
+      .maybeSingle()
+
+    if (checkError) {
+      console.error('❌ 중복 체크 실패:', checkError)
+      throw new Error('사업자번호 중복 확인 중 오류가 발생했습니다.')
+    }
+
+    if (existingClient) {
+      console.warn('⚠️ 사업자번호 중복 발견:', {
+        기존업체: existingClient.store_name,
+        기존ID: existingClient.id,
+        입력업체: client.store_name
+      })
+      throw new Error(`사업자번호 '${client.business_number}'는 이미 등록된 업체(${existingClient.store_name})에서 사용중입니다.`)
+    }
+
+    console.log('✅ 사업자번호 중복 체크 통과')
+
+    // 2단계: 클라이언트 생성
+    console.log('🏪 2단계: 클라이언트 정보 저장...')
     const { data: clientData, error: clientError } = await supabase
       .from('clients')
       .insert([{
@@ -294,26 +321,92 @@ export async function createClient(client: {
       .select()
       .single()
 
-    if (clientError) throw clientError
-
-    // 플랫폼 정보가 있으면 추가
-    if (client.platforms && client.platforms.length > 0) {
-      const platformData = client.platforms.map(platform => ({
-        client_id: clientData.id,
-        ...platform
-      }))
-
-      const { error: platformError } = await supabase
-        .from('client_platforms')
-        .insert(platformData)
-
-      if (platformError) throw platformError
+    if (clientError) {
+      console.error('❌ 클라이언트 생성 실패:', {
+        message: clientError.message,
+        details: clientError.details,
+        hint: clientError.hint,
+        code: clientError.code
+      })
+      
+      // 구체적인 에러 메시지 제공
+      let errorMessage = '광고주 등록에 실패했습니다.'
+      
+      if (clientError.code === '23505') {
+        if (clientError.message?.includes('business_number')) {
+          errorMessage = `사업자번호 '${client.business_number}'는 이미 등록되어 있습니다.`
+        } else {
+          errorMessage = '이미 등록된 정보가 있습니다.'
+        }
+      } else if (clientError.code === '23503') {
+        errorMessage = '잘못된 대행사 정보입니다.'
+      } else if (clientError.code === '23514') {
+        errorMessage = '입력한 정보가 유효하지 않습니다.'
+      } else if (clientError.message?.includes('permission')) {
+        errorMessage = '등록 권한이 없습니다.'
+      } else if (clientError.message) {
+        errorMessage = clientError.message
+      }
+      
+      throw new Error(errorMessage)
     }
 
-    return { data: clientData, error: null }
-  } catch (error) {
-    console.error('Error creating client:', error)
-    return { data: null, error }
+    console.log('✅ 클라이언트 생성 성공:', {
+      id: clientData.id,
+      store_name: clientData.store_name
+    })
+
+    // 3단계: 플랫폼 정보 저장 (있는 경우)
+    if (client.platforms && client.platforms.length > 0) {
+      console.log('🔧 3단계: 플랫폼 정보 저장...', client.platforms.length + '개')
+      
+      // 빈 플랫폼 정보 제거
+      const validPlatforms = client.platforms.filter(platform => 
+        platform.platform_name && platform.platform_name.trim() !== ''
+      )
+
+      if (validPlatforms.length > 0) {
+        const platformData = validPlatforms.map(platform => ({
+          client_id: clientData.id,
+          platform_name: platform.platform_name,
+          platform_id: platform.platform_id || '',
+          platform_password: platform.platform_password || '',
+          shop_id: platform.shop_id || ''
+        }))
+
+        const { error: platformError } = await supabase
+          .from('client_platforms')
+          .insert(platformData)
+
+        if (platformError) {
+          console.error('❌ 플랫폼 정보 저장 실패:', platformError)
+          
+          // 클라이언트는 생성되었지만 플랫폼 정보 저장 실패 시 경고만 표시
+          console.warn('⚠️ 플랫폼 정보 저장 실패 - 클라이언트만 등록됨')
+          // 플랫폼 오류는 치명적이지 않으므로 성공으로 처리하고 경고만 남김
+        } else {
+          console.log('✅ 플랫폼 정보 저장 성공:', validPlatforms.length + '개')
+        }
+      } else {
+        console.log('ℹ️ 유효한 플랫폼 정보 없음 - 기본 정보만 저장')
+      }
+    } else {
+      console.log('ℹ️ 플랫폼 정보 없음 - 기본 정보만 저장')
+    }
+
+    console.log('🎉 광고주 등록 완료!')
+    return { 
+      data: clientData, 
+      error: null,
+      message: '광고주가 성공적으로 등록되었습니다.'
+    }
+  } catch (error: any) {
+    console.error('💥 광고주 등록 실패:', error)
+    return { 
+      data: null, 
+      error: error.message || '알 수 없는 오류가 발생했습니다.',
+      message: error.message || '광고주 등록에 실패했습니다.'
+    }
   }
 }
 

@@ -27,48 +27,75 @@ interface Client {
 }
 
 export default function DashboardPage() {
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading, refreshUser } = useAuth()
   const { isSuperAdmin, agencyId } = usePermission()
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [recentClients, setRecentClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    async function loadDashboardData() {
-      // 인증 정보가 아직 로딩 중이면 대기
-      if (authLoading || !user) {
-        return
+  // 대시보드 데이터 로드 함수
+  const loadDashboardData = async () => {
+    // 인증 정보가 아직 로딩 중이면 대기
+    if (authLoading || !user) {
+      return
+    }
+
+    try {
+      setLoading(true)
+      setError(null)
+
+      console.log('📊 대시보드 데이터 로드 중...')
+
+      // 통계 데이터 로드 (슈퍼 관리자는 모든 데이터, 아니면 자기 대행사 데이터만)
+      const statsResult = await getDashboardStats(isSuperAdmin ? undefined : agencyId || undefined)
+      if (statsResult.error) {
+        throw new Error('통계 데이터를 불러오는데 실패했습니다.')
       }
 
-      try {
-        setLoading(true)
-        setError(null)
+      // 최근 클라이언트 데이터 로드
+      const clientsResult = await getClients(isSuperAdmin ? undefined : agencyId || undefined)
+      if (clientsResult.error) {
+        throw new Error('클라이언트 데이터를 불러오는데 실패했습니다.')
+      }
 
-        // 통계 데이터 로드 (슈퍼 관리자는 모든 데이터, 아니면 자기 대행사 데이터만)
-        const statsResult = await getDashboardStats(isSuperAdmin ? undefined : agencyId || undefined)
-        if (statsResult.error) {
-          throw new Error('통계 데이터를 불러오는데 실패했습니다.')
+      setStats(statsResult.data)
+      setRecentClients(clientsResult.data?.slice(0, 3) || []) // 최근 3개만 표시
+      console.log('✅ 대시보드 데이터 로드 완료')
+    } catch (err) {
+      console.error('Dashboard data loading error:', err)
+      setError(err instanceof Error ? err.message : '데이터를 불러오는데 실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (user) {
+      console.log('👤 사용자 정보 변경 감지 - 대시보드 데이터 새로고침')
+      loadDashboardData()
+    }
+  }, [authLoading, user, isSuperAdmin, agencyId])
+
+  // 페이지 visibility 변화 감지 (다른 탭에서 돌아올 때)
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (!document.hidden && user) {
+        console.log('👁️ 페이지 재활성화 감지 - 대시보드 데이터 새로고침')
+        try {
+          await refreshUser()
+          await loadDashboardData()
+        } catch (error) {
+          console.warn('⚠️ 페이지 재활성화 시 새로고침 실패:', error)
         }
-
-        // 최근 클라이언트 데이터 로드
-        const clientsResult = await getClients(isSuperAdmin ? undefined : agencyId || undefined)
-        if (clientsResult.error) {
-          throw new Error('클라이언트 데이터를 불러오는데 실패했습니다.')
-        }
-
-        setStats(statsResult.data)
-        setRecentClients(clientsResult.data?.slice(0, 3) || []) // 최근 3개만 표시
-      } catch (err) {
-        console.error('Dashboard data loading error:', err)
-        setError(err instanceof Error ? err.message : '데이터를 불러오는데 실패했습니다.')
-      } finally {
-        setLoading(false)
       }
     }
 
-    loadDashboardData()
-  }, [authLoading, user, isSuperAdmin, agencyId])
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [user, refreshUser])
 
   // 로딩 상태 (인증 정보 로딩 중이거나 데이터 로딩 중)
   if (authLoading || loading || !user) {
