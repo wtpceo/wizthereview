@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Search, Edit, Trash2, Eye, Plus, X, Download, Filter, MoreHorizontal, Info, EyeOff, Copy, Check, Users } from "lucide-react"
 import { downloadClientsExcel, downloadClientsWithPlatformsExcel } from "@/lib/excel-utils"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { getClientPlatforms, getClients, createClient, updateClient, updateClientPlatforms } from "@/lib/database"
+import { getClientPlatforms, getClients, createClient, updateClient, updateClientPlatforms, deleteClient } from "@/lib/database"
 import { useAuth } from "@/components/auth/auth-context"
 import { useRouter } from "next/navigation"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -177,11 +177,37 @@ export default function ClientsPage() {
     }
   }
 
-  const handleDelete = (id: number) => {
-    if (confirm("정말로 이 광고주를 삭제하시겠습니까?")) {
-      const updatedClients = clients.filter((client) => client.id !== id)
-      setClients(updatedClients)
-      setFilteredClients(updatedClients)
+  const handleDelete = async (id: number) => {
+    if (confirm("정말로 이 광고주를 삭제하시겠습니까?\n\n※ 삭제된 데이터는 복구할 수 없습니다.")) {
+      try {
+        console.log('🗑️ 광고주 삭제 중...', id)
+        
+        const { error } = await deleteClient(id)
+        
+        if (error) {
+          console.error('❌ 광고주 삭제 실패:', error)
+          let errorMessage = '광고주 삭제에 실패했습니다.'
+          
+          if (typeof error === 'string') {
+            errorMessage = error
+          } else if (error && typeof error === 'object' && 'message' in error) {
+            errorMessage = (error as any).message
+          }
+          
+          alert(`❌ ${errorMessage}`)
+          return
+        }
+        
+        console.log('✅ 광고주 삭제 성공')
+        alert('✅ 광고주가 성공적으로 삭제되었습니다!')
+        
+        // 삭제 성공 후 목록 새로고침
+        await loadClients()
+        
+      } catch (error: any) {
+        console.error('💥 광고주 삭제 중 예외 발생:', error)
+        alert(`❌ 광고주 삭제 중 오류가 발생했습니다: ${error?.message || '알 수 없는 오류'}`)
+      }
     }
   }
 
