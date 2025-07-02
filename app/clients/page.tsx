@@ -28,6 +28,7 @@ interface PlatformInfo {
   platformId: string
   platformPassword: string
   shopId: string
+  answerGuide: string
 }
 
 interface ClientPlatform {
@@ -37,6 +38,7 @@ interface ClientPlatform {
   platform_id: string
   platform_password: string
   shop_id: string
+  answer_guide: string
   created_at: string
   updated_at: string
 }
@@ -88,7 +90,7 @@ export default function ClientsPage() {
   })
 
   const [platforms, setPlatforms] = useState<PlatformInfo[]>([
-    { id: "1", platform: "", platformId: "", platformPassword: "", shopId: "" },
+    { id: "1", platform: "", platformId: "", platformPassword: "", shopId: "", answerGuide: "" },
   ])
 
 
@@ -164,13 +166,34 @@ export default function ClientsPage() {
     const dataToDownload = filteredClients.length > 0 ? filteredClients : clients
     const filename = `${user?.agency_name || 'Clime'}_광고주목록`
     
+    console.log('🔄 엑셀 다운로드 시작:', {
+      사용자정보: {
+        id: user?.id,
+        email: user?.email,
+        role: user?.role,
+        agency_id: user?.agency_id,
+        agency_name: user?.agency_name
+      },
+      광고주수: dataToDownload.length,
+      파일명: filename
+    })
+    
     setIsDownloadingExcel(true)
     
     try {
+      // 첫 번째 클라이언트로 플랫폼 정보 테스트
+      if (dataToDownload.length > 0) {
+        console.log('🧪 첫 번째 클라이언트 플랫폼 정보 테스트:', dataToDownload[0])
+        const testResult = await getClientPlatforms(dataToDownload[0].id)
+        console.log('🧪 테스트 결과:', testResult)
+      }
+      
       await downloadClientsWithPlatformsExcel(dataToDownload, getClientPlatforms, filename)
+      console.log('✅ 엑셀 다운로드 성공')
     } catch (error) {
-      console.error('엑셀 다운로드 중 오류가 발생했습니다:', error)
+      console.error('❌ 엑셀 다운로드 중 오류가 발생했습니다:', error)
       // 실패시 기본 다운로드로 fallback
+      console.log('🔄 기본 엑셀 다운로드로 fallback')
       downloadClientsExcel(dataToDownload, filename)
     } finally {
       setIsDownloadingExcel(false)
@@ -221,6 +244,7 @@ export default function ClientsPage() {
           platformId: "",
           platformPassword: "",
           shopId: "",
+          answerGuide: "",
         },
       ])
     }
@@ -243,7 +267,7 @@ export default function ClientsPage() {
       ownerPhone: "",
       memo: "",
     })
-    setPlatforms([{ id: "1", platform: "", platformId: "", platformPassword: "", shopId: "" }])
+    setPlatforms([{ id: "1", platform: "", platformId: "", platformPassword: "", shopId: "", answerGuide: "" }])
     setEditingClient(null)
   }
 
@@ -272,7 +296,7 @@ export default function ClientsPage() {
         console.error('❌ 기존 플랫폼 정보 로딩 실패:', error)
         console.warn('⚠️ 기존 플랫폼 정보를 불러올 수 없어서 빈 상태로 시작합니다.')
         // 에러가 있어도 기본 빈 플랫폼으로 시작
-        setPlatforms([{ id: "1", platform: "", platformId: "", platformPassword: "", shopId: "" }])
+        setPlatforms([{ id: "1", platform: "", platformId: "", platformPassword: "", shopId: "", answerGuide: "" }])
       } else if (existingPlatforms && existingPlatforms.length > 0) {
         console.log('✅ 기존 플랫폼 정보 로딩 성공:', existingPlatforms.length + '개')
         
@@ -282,7 +306,8 @@ export default function ClientsPage() {
           platform: platform.platform_name || "",
           platformId: platform.platform_id || "",
           platformPassword: platform.platform_password || "",
-          shopId: platform.shop_id || ""
+          shopId: platform.shop_id || "",
+          answerGuide: platform.answer_guide || ""
         }))
         
         setPlatforms(platformsForForm)
@@ -290,7 +315,7 @@ export default function ClientsPage() {
       } else {
         console.log('ℹ️ 기존 플랫폼 정보 없음 - 빈 상태로 시작')
         // 기존 플랫폼 정보가 없으면 빈 플랫폼 하나로 시작
-        setPlatforms([{ id: "1", platform: "", platformId: "", platformPassword: "", shopId: "" }])
+        setPlatforms([{ id: "1", platform: "", platformId: "", platformPassword: "", shopId: "", answerGuide: "" }])
       }
       
       // 다이얼로그 열기
@@ -302,7 +327,7 @@ export default function ClientsPage() {
       alert('❌ 수정 정보를 불러오는 중 오류가 발생했습니다.')
       
       // 오류가 발생해도 기본 정보로 다이얼로그 열기
-      setPlatforms([{ id: "1", platform: "", platformId: "", platformPassword: "", shopId: "" }])
+      setPlatforms([{ id: "1", platform: "", platformId: "", platformPassword: "", shopId: "", answerGuide: "" }])
       setIsDialogOpen(true)
     }
   }
@@ -327,7 +352,8 @@ export default function ClientsPage() {
           platform_name: p.platform,
           platform_id: p.platformId,
           platform_password: p.platformPassword,
-          shop_id: p.shopId
+          shop_id: p.shopId,
+          answer_guide: p.answerGuide
         }))
 
       if (editingClient) {
@@ -679,6 +705,21 @@ export default function ClientsPage() {
                               className="focus:ring-2 focus:ring-blue-500"
                             />
                           </div>
+                        </div>
+                        
+                        {/* 답변 지침 - 전체 너비 */}
+                        <div className="space-y-2 mt-4">
+                          <Label className="text-sm font-medium">답변 지침 (선택사항)</Label>
+                          <textarea
+                            value={platform.answerGuide}
+                            onChange={(e) => updatePlatform(platform.id, "answerGuide", e.target.value)}
+                            placeholder="이 플랫폼 관련 문의나 설정 시 참고할 지침이나 메모를 입력하세요..."
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none text-sm"
+                            rows={3}
+                          />
+                          <p className="text-xs text-gray-500">
+                            고객 문의나 설정 변경 시 참고할 지침을 입력해주세요.
+                          </p>
                         </div>
                       </div>
                     ))}
@@ -1056,6 +1097,20 @@ export default function ClientsPage() {
                             {new Date(platform.updated_at).toLocaleDateString('ko-KR')}
                           </span>
                         </div>
+                        
+                        {/* 답변 지침 표시 */}
+                        {platform.answer_guide && (
+                          <div className="pt-2 border-t">
+                            <div className="space-y-1">
+                              <span className="font-medium text-gray-600 text-sm">답변 지침:</span>
+                              <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                                <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                                  {platform.answer_guide}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}

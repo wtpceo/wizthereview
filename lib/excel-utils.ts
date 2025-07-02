@@ -70,6 +70,7 @@ export const downloadClientsWithPlatformsExcel = async (
             플랫폼아이디: platform.platform_id || '',
             플랫폼비밀번호: platform.platform_password || '',
             샵아이디: platform.shop_id || '',
+            답변지침: platform.answer_guide || '',
             등록일: platform.created_at ? new Date(platform.created_at).toLocaleDateString('ko-KR') : '',
             수정일: platform.updated_at ? new Date(platform.updated_at).toLocaleDateString('ko-KR') : ''
           })
@@ -91,6 +92,7 @@ export const downloadClientsWithPlatformsExcel = async (
       { wch: 20 }, // 플랫폼아이디
       { wch: 15 }, // 플랫폼비밀번호
       { wch: 15 }, // 샵아이디
+      { wch: 40 }, // 답변지침
       { wch: 12 }, // 등록일
       { wch: 12 }, // 수정일
     ]

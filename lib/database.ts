@@ -278,6 +278,7 @@ export async function createClient(client: {
     platform_id: string
     platform_password: string
     shop_id: string
+    answer_guide?: string
   }>
 }) {
   try {
@@ -371,7 +372,8 @@ export async function createClient(client: {
           platform_name: platform.platform_name,
           platform_id: platform.platform_id || '',
           platform_password: platform.platform_password || '',
-          shop_id: platform.shop_id || ''
+          shop_id: platform.shop_id || '',
+          answer_guide: platform.answer_guide || ''
         }))
 
         const { error: platformError } = await supabase
@@ -460,15 +462,60 @@ export async function deleteClient(clientId: number) {
 // 플랫폼 관련 함수들
 export async function getClientPlatforms(clientId: number) {
   try {
-    const { data, error } = await supabase
+    console.log('🔍 플랫폼 정보 조회 시작:', { clientId })
+    
+    // 현재 사용자 세션 확인
+    const { data: { user }, error: sessionError } = await supabase.auth.getUser()
+    
+    if (sessionError) {
+      console.error('❌ 세션 확인 실패:', sessionError)
+    } else if (user) {
+      console.log('👤 현재 사용자:', { id: user.id, email: user.email })
+    } else {
+      console.log('⚠️ 사용자 세션 없음')
+    }
+
+    // 일반 클라이언트로 먼저 시도
+    let result = await supabase
       .from('client_platforms')
       .select('*')
       .eq('client_id', clientId)
 
-    if (error) throw error
-    return { data, error: null }
+    console.log('📊 플랫폼 조회 결과 (일반):', {
+      success: !result.error,
+      dataCount: result.data?.length || 0,
+      error: result.error?.message
+    })
+
+    // 에러가 있거나 데이터가 없는데 서비스 롤이 있으면 서비스 롤로 재시도
+    if ((result.error || !result.data || result.data.length === 0) && supabaseAdmin !== supabase) {
+      console.log('🔄 서비스 롤로 재시도...')
+      
+      const adminResult = await supabaseAdmin
+        .from('client_platforms')
+        .select('*')
+        .eq('client_id', clientId)
+
+      console.log('📊 플랫폼 조회 결과 (서비스 롤):', {
+        success: !adminResult.error,
+        dataCount: adminResult.data?.length || 0,
+        error: adminResult.error?.message
+      })
+
+      if (!adminResult.error) {
+        result = adminResult
+      }
+    }
+
+    if (result.error) {
+      console.error('❌ 플랫폼 정보 조회 실패:', result.error)
+      throw result.error
+    }
+
+    console.log('✅ 플랫폼 정보 조회 성공:', result.data?.length || 0, '개')
+    return { data: result.data, error: null }
   } catch (error) {
-    console.error('Error fetching client platforms:', error)
+    console.error('💥 플랫폼 정보 조회 중 예외:', error)
     return { data: null, error }
   }
 }
@@ -480,6 +527,7 @@ export async function updateClientPlatforms(
     platform_id: string
     platform_password: string
     shop_id: string
+    answer_guide?: string
   }>
 ) {
   try {
@@ -493,7 +541,11 @@ export async function updateClientPlatforms(
     if (platforms.length > 0) {
       const platformData = platforms.map(platform => ({
         client_id: clientId,
-        ...platform
+        platform_name: platform.platform_name,
+        platform_id: platform.platform_id,
+        platform_password: platform.platform_password,
+        shop_id: platform.shop_id,
+        answer_guide: platform.answer_guide || ''
       }))
 
       const { error } = await supabase

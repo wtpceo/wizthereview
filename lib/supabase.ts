@@ -118,6 +118,7 @@ export interface Database {
           platform_id: string
           platform_password: string
           shop_id: string
+          answer_guide: string
           created_at: string
           updated_at: string
         }
@@ -127,6 +128,7 @@ export interface Database {
           platform_id: string
           platform_password: string
           shop_id: string
+          answer_guide?: string
           created_at?: string
           updated_at?: string
         }
@@ -135,6 +137,7 @@ export interface Database {
           platform_id?: string
           platform_password?: string
           shop_id?: string
+          answer_guide?: string
           updated_at?: string
         }
       }
