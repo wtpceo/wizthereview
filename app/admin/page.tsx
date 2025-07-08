@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Search, Building2, Users, TrendingUp, Calendar, Eye, Edit, Trash2, Download, Info, EyeOff, Copy, Check, Plus, Shield, AlertTriangle } from "lucide-react"
+import { Search, Building2, Users, TrendingUp, Calendar, Eye, Edit, Trash2, Download, Info, EyeOff, Copy, Check, Plus, Shield, AlertTriangle, RefreshCw, FileSpreadsheet } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { downloadClientsExcel, downloadAgenciesExcel } from "@/lib/excel-utils"
@@ -106,6 +106,15 @@ export default function AdminPage() {
     adminPassword: '',
     adminName: ''
   })
+
+  // 구글 시트 동기화 관련 상태
+  const [isGoogleSheetSyncModalOpen, setIsGoogleSheetSyncModalOpen] = useState(false)
+  const [isSyncingGoogleSheet, setIsSyncingGoogleSheet] = useState(false)
+  const [syncStatus, setSyncStatus] = useState<{
+    type: 'success' | 'error' | 'info' | null
+    message: string
+  }>({ type: null, message: '' })
+  const [spreadsheetId, setSpreadsheetId] = useState('')
 
   // 데이터 로딩 함수
   const loadData = async () => {
@@ -350,6 +359,66 @@ export default function AdminPage() {
     }))
   }
 
+  // 구글 시트 동기화 함수
+  const handleGoogleSheetSync = async (syncType: 'all' | 'test') => {
+    if (!spreadsheetId.trim()) {
+      setSyncStatus({
+        type: 'error',
+        message: '구글 시트 ID를 입력해주세요.'
+      })
+      return
+    }
+
+    setIsSyncingGoogleSheet(true)
+    setSyncStatus({ type: null, message: '' })
+
+    try {
+      console.log(`🔄 구글 시트 동기화 시작 (${syncType})...`)
+      
+      const response = await fetch('/api/sync-google-sheets', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          type: syncType === 'all' ? 'all' : 'all', // 테스트도 전체 동기화로 진행
+          spreadsheetId: spreadsheetId.trim()
+        })
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        setSyncStatus({
+          type: 'success',
+          message: result.message || '구글 시트 동기화가 완료되었습니다.'
+        })
+        console.log('✅ 구글 시트 동기화 성공')
+      } else {
+        setSyncStatus({
+          type: 'error',
+          message: result.error || '동기화 중 오류가 발생했습니다.'
+        })
+        console.error('❌ 구글 시트 동기화 실패:', result.error)
+      }
+
+    } catch (error: any) {
+      setSyncStatus({
+        type: 'error',
+        message: '네트워크 오류가 발생했습니다.'
+      })
+      console.error('💥 구글 시트 동기화 API 호출 실패:', error)
+    } finally {
+      setIsSyncingGoogleSheet(false)
+    }
+  }
+
+  // 구글 시트 동기화 모달 초기화
+  const resetGoogleSheetModal = () => {
+    setSyncStatus({ type: null, message: '' })
+    setSpreadsheetId('')
+  }
+
   // 인증 로딩 중
   if (authLoading) {
     return (
@@ -474,6 +543,14 @@ export default function AdminPage() {
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   새 대행사 추가
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => setIsGoogleSheetSyncModalOpen(true)}
+                  className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-green-600"
+                >
+                  <FileSpreadsheet className="h-4 w-4 mr-2" />
+                  구글 시트 동기화
                 </Button>
                 <Button variant="outline" onClick={handleDownloadAgenciesExcel}>
                   <Download className="h-4 w-4 mr-2" />
@@ -1041,6 +1118,124 @@ export default function AdminPage() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* 구글 시트 동기화 모달 */}
+      <Dialog open={isGoogleSheetSyncModalOpen} onOpenChange={setIsGoogleSheetSyncModalOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold">
+              구글 시트 동기화
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            {/* 안내 정보 */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-start space-x-3">
+                <Info className="h-5 w-5 text-blue-600 mt-0.5" />
+                <div className="space-y-2">
+                  <h4 className="font-medium text-blue-900">구글 시트 동기화 안내</h4>
+                  <ul className="text-sm text-blue-800 space-y-1">
+                    <li>• 플랫폼별로 별도 탭에 데이터가 저장됩니다</li>
+                    <li>• 네이버플레이스 → '네이버 플레이스' 탭</li>
+                    <li>• 배달의민족 → '배민' 탭</li>
+                    <li>• 쿠팡이츠 → '쿠팡' 탭</li>
+                    <li>• 요기요 → '요기요' 탭</li>
+                    <li>• 각 탭에는 업체명, 아이디, 비밀번호, 샵아이디가 저장됩니다</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {/* 구글 시트 ID 입력 */}
+            <div className="space-y-3">
+              <Label htmlFor="spreadsheetId" className="text-sm font-medium">
+                구글 시트 ID *
+              </Label>
+              <Input
+                id="spreadsheetId"
+                value={spreadsheetId}
+                onChange={(e) => setSpreadsheetId(e.target.value)}
+                placeholder="구글 시트 URL에서 ID 부분을 복사해서 붙여넣으세요"
+                className="focus:ring-2 focus:ring-blue-500"
+                disabled={isSyncingGoogleSheet}
+              />
+              <p className="text-xs text-gray-500">
+                예: https://docs.google.com/spreadsheets/d/<strong>1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms</strong>/edit
+              </p>
+            </div>
+
+            {/* 동기화 상태 표시 */}
+            {syncStatus.type && (
+              <Alert className={`
+                ${syncStatus.type === 'success' ? 'border-green-200 bg-green-50' : ''}
+                ${syncStatus.type === 'error' ? 'border-red-200 bg-red-50' : ''}
+                ${syncStatus.type === 'info' ? 'border-blue-200 bg-blue-50' : ''}
+              `}>
+                <AlertDescription className={`
+                  ${syncStatus.type === 'success' ? 'text-green-800' : ''}
+                  ${syncStatus.type === 'error' ? 'text-red-800' : ''}
+                  ${syncStatus.type === 'info' ? 'text-blue-800' : ''}
+                `}>
+                  {syncStatus.message}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* 버튼 영역 */}
+            <div className="flex justify-end gap-3 pt-6 border-t">
+              <Button 
+                type="button"
+                variant="outline" 
+                onClick={() => {
+                  setIsGoogleSheetSyncModalOpen(false)
+                  resetGoogleSheetModal()
+                }}
+                disabled={isSyncingGoogleSheet}
+              >
+                취소
+              </Button>
+              <Button 
+                type="button"
+                variant="outline"
+                onClick={() => handleGoogleSheetSync('test')}
+                disabled={isSyncingGoogleSheet || !spreadsheetId.trim()}
+                className="bg-yellow-50 hover:bg-yellow-100 text-yellow-700 border-yellow-300"
+              >
+                {isSyncingGoogleSheet ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-700 mr-2"></div>
+                    테스트 중...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    테스트 동기화
+                  </>
+                )}
+              </Button>
+              <Button 
+                type="button"
+                onClick={() => handleGoogleSheetSync('all')}
+                disabled={isSyncingGoogleSheet || !spreadsheetId.trim()}
+                className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
+              >
+                {isSyncingGoogleSheet ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    동기화 중...
+                  </>
+                ) : (
+                  <>
+                    <FileSpreadsheet className="h-4 w-4 mr-2" />
+                    전체 동기화
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

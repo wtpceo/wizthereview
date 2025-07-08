@@ -1,5 +1,6 @@
 import { supabase, supabaseAdmin } from './supabase'
 import { FileType, ClientFile, FileUploadRequest, FileUploadResponse } from './types'
+import { syncNewClientToSheet } from './google-sheets'
 
 // 대행사 관련 함수들
 export async function getAgencies() {
@@ -407,6 +408,44 @@ export async function createClient(client: {
     }
 
     console.log('🎉 광고주 등록 완료!')
+    
+    // 실시간 구글 시트 동기화
+    try {
+      console.log('📊 실시간 구글 시트 동기화 시작...')
+      
+      // 플랫폼 정보가 있는 경우에만 동기화
+      if (client.platforms && client.platforms.length > 0) {
+        const validPlatforms = client.platforms.filter(platform => 
+          platform.platform_name && platform.platform_name.trim() !== ''
+        )
+        
+        if (validPlatforms.length > 0) {
+          const syncResult = await syncNewClientToSheet(
+            {
+              id: clientData.id,
+              store_name: clientData.store_name,
+              created_at: clientData.created_at
+            },
+            validPlatforms
+          )
+          
+          if (syncResult.success) {
+            console.log('✅ 실시간 구글 시트 동기화 완료:', syncResult.message)
+          } else {
+            console.error('❌ 실시간 구글 시트 동기화 실패:', syncResult.error)
+            // 동기화 실패는 치명적이지 않으므로 경고만 표시
+          }
+        } else {
+          console.log('ℹ️ 동기화할 유효한 플랫폼 정보 없음')
+        }
+      } else {
+        console.log('ℹ️ 플랫폼 정보 없음 - 동기화 건너뛰기')
+      }
+    } catch (syncError: any) {
+      console.error('❌ 실시간 동기화 중 오류:', syncError)
+      // 동기화 실패는 치명적이지 않으므로 계속 진행
+    }
+    
     return { 
       data: clientData, 
       error: null,
