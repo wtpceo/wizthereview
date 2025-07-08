@@ -26,6 +26,7 @@ export interface ExcelAgency {
 export const downloadClientsWithPlatformsExcel = async (
   clients: any[], 
   getClientPlatforms: (clientId: number) => Promise<any>,
+  getClientFiles?: (clientId: number) => Promise<any>,
   filename = "광고주_상세목록"
 ) => {
   try {
@@ -68,10 +69,11 @@ export const downloadClientsWithPlatformsExcel = async (
 
     // 2. 플랫폼 상세 정보 수집 - 개선된 에러 처리
     const platformData: any[] = []
+    const fileData: any[] = []
     let successCount = 0
     let failureCount = 0
     
-    console.log('🔄 플랫폼 정보 수집 시작...')
+    console.log('🔄 플랫폼 및 파일 정보 수집 시작...')
     
     for (const client of clients) {
       try {
@@ -134,26 +136,100 @@ export const downloadClientsWithPlatformsExcel = async (
             상태: '플랫폼 미등록'
           })
         }
-      } catch (error) {
-        console.error(`💥 ${client.storeName} 플랫폼 정보 조회 중 예외 발생:`, error)
-        failureCount++
-        
-        // 예외가 발생해도 기본 정보는 추가
-        platformData.push({
-          매장명: client.storeName,
-          사업자등록번호: client.businessNumber,
-          대행사: client.agency,
-          플랫폼명: '조회 오류',
-          플랫폼아이디: '-',
-          플랫폼비밀번호: '-',
-          샵아이디: '-',
-          답변지침: '-',
-          등록일: '-',
-          수정일: '-',
-          상태: '시스템 오류'
-        })
+              } catch (error) {
+          console.error(`💥 ${client.storeName} 플랫폼 정보 조회 중 예외 발생:`, error)
+          failureCount++
+          
+          // 예외가 발생해도 기본 정보는 추가
+          platformData.push({
+            매장명: client.storeName,
+            사업자등록번호: client.businessNumber,
+            대행사: client.agency,
+            플랫폼명: '조회 오류',
+            플랫폼아이디: '-',
+            플랫폼비밀번호: '-',
+            샵아이디: '-',
+            답변지침: '-',
+            등록일: '-',
+            수정일: '-',
+            상태: '시스템 오류'
+          })
+        }
+
+        // 파일 정보 수집 (getClientFiles가 제공된 경우에만)
+        if (getClientFiles) {
+          try {
+            console.log(`📁 ${client.storeName}(ID: ${client.id}) 파일 정보 조회 중...`)
+            
+            const fileResult = await getClientFiles(client.id)
+            
+            if (fileResult.error) {
+              console.error(`❌ ${client.storeName} 파일 정보 조회 실패:`, fileResult.error)
+              
+              // 파일 정보 조회 실패해도 기본 정보 추가
+              fileData.push({
+                매장명: client.storeName,
+                사업자등록번호: client.businessNumber,
+                대행사: client.agency,
+                파일타입: '조회 실패',
+                파일명: '-',
+                파일크기: '-',
+                업로드일: '-',
+                상태: '조회 실패'
+              })
+            } else if (fileResult.data && fileResult.data.length > 0) {
+              console.log(`✅ ${client.storeName} 파일 정보 조회 성공: ${fileResult.data.length}개`)
+              
+              fileResult.data.forEach((file: any) => {
+                const fileTypeLabels: {[key: string]: string} = {
+                  'id_card': '신분증',
+                  'contract': '계약서',
+                  'cms_application': 'CMS 신청서'
+                }
+                
+                fileData.push({
+                  매장명: client.storeName,
+                  사업자등록번호: client.businessNumber,
+                  대행사: client.agency,
+                  파일타입: fileTypeLabels[file.file_type] || file.file_type,
+                  파일명: file.file_name || '',
+                  파일크기: file.file_size ? `${(file.file_size / 1024).toFixed(1)}KB` : '',
+                  업로드일: file.uploaded_at ? new Date(file.uploaded_at).toLocaleDateString('ko-KR') : '',
+                  상태: '정상'
+                })
+              })
+            } else {
+              console.log(`ℹ️ ${client.storeName} 파일 정보 없음`)
+              
+              // 파일이 없는 경우도 표시
+              fileData.push({
+                매장명: client.storeName,
+                사업자등록번호: client.businessNumber,
+                대행사: client.agency,
+                파일타입: '파일 없음',
+                파일명: '-',
+                파일크기: '-',
+                업로드일: '-',
+                상태: '파일 미업로드'
+              })
+            }
+          } catch (error) {
+            console.error(`💥 ${client.storeName} 파일 정보 조회 중 예외 발생:`, error)
+            
+            // 예외가 발생해도 기본 정보 추가
+            fileData.push({
+              매장명: client.storeName,
+              사업자등록번호: client.businessNumber,
+              대행사: client.agency,
+              파일타입: '조회 오류',
+              파일명: '-',
+              파일크기: '-',
+              업로드일: '-',
+              상태: '시스템 오류'
+            })
+          }
+        }
       }
-    }
 
     console.log('📊 플랫폼 정보 수집 완료:', {
       성공: successCount,
@@ -179,12 +255,35 @@ export const downloadClientsWithPlatformsExcel = async (
     platformWorksheet["!cols"] = platformColWidths
     XLSX.utils.book_append_sheet(workbook, platformWorksheet, "2. 플랫폼 계정정보")
 
-    // 4. 요약 정보 시트 추가
+    // 4. 파일 정보 시트 추가 (파일 정보가 있는 경우만)
+    if (getClientFiles && fileData.length > 0) {
+      console.log('📄 파일 정보 시트 생성 중...')
+      
+      const fileWorksheet = XLSX.utils.json_to_sheet(fileData)
+      const fileColWidths = [
+        { wch: 20 }, // 매장명
+        { wch: 15 }, // 사업자등록번호
+        { wch: 15 }, // 대행사
+        { wch: 15 }, // 파일타입
+        { wch: 30 }, // 파일명
+        { wch: 10 }, // 파일크기
+        { wch: 12 }, // 업로드일
+        { wch: 12 }, // 상태
+      ]
+      fileWorksheet["!cols"] = fileColWidths
+      XLSX.utils.book_append_sheet(workbook, fileWorksheet, "3. 파일 정보")
+      
+      console.log('✅ 파일 정보 시트 생성 완료:', fileData.length, '개')
+    }
+
+    // 5. 요약 정보 시트 추가
     const summaryData = [
       { 구분: '총 광고주 수', 값: clients.length },
       { 구분: '플랫폼 정보 조회 성공', 값: successCount },
       { 구분: '플랫폼 정보 조회 실패', 값: failureCount },
       { 구분: '총 플랫폼 계정 수', 값: platformData.filter(p => p.상태 === '정상').length },
+      { 구분: '파일 정보 포함', 값: getClientFiles ? '예' : '아니오' },
+      { 구분: '총 파일 수', 값: getClientFiles ? fileData.filter(f => f.상태 === '정상').length : 0 },
       { 구분: '다운로드 일시', 값: new Date().toLocaleString('ko-KR') }
     ]
     

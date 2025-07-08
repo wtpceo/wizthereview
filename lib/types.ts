@@ -70,6 +70,45 @@ export interface ClientPlatform {
   updated_at: string;
 }
 
+// 파일 타입 열거형
+export type FileType = 'id_card' | 'contract' | 'cms_application';
+
+// 파일 타입 한글 매핑
+export const FILE_TYPE_LABELS: Record<FileType, string> = {
+  id_card: '신분증',
+  contract: '계약서',
+  cms_application: 'CMS 신청서'
+};
+
+// 클라이언트 파일 타입
+export interface ClientFile {
+  id: number;
+  client_id: number;
+  file_type: FileType;
+  file_name: string;
+  file_path: string;
+  file_size: number;
+  mime_type: string;
+  uploaded_by?: string;
+  uploaded_at: string;
+  updated_at: string;
+}
+
+// 파일 업로드 요청 타입
+export interface FileUploadRequest {
+  client_id: number;
+  file_type: FileType;
+  file: File;
+}
+
+// 파일 업로드 응답 타입
+export interface FileUploadResponse {
+  success: boolean;
+  file_id?: number;
+  file_path?: string;
+  error?: string;
+}
+
 // API 응답 타입
 export interface ApiResponse<T> {
   data?: T;

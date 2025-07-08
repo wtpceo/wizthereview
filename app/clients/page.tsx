@@ -12,13 +12,14 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Search, Edit, Trash2, Eye, Plus, X, Download, Filter, MoreHorizontal, Info, EyeOff, Copy, Check, Users } from "lucide-react"
+import { Search, Edit, Trash2, Eye, Plus, X, Download, Filter, MoreHorizontal, Info, EyeOff, Copy, Check, Users, Upload, File, Paperclip } from "lucide-react"
 import { downloadClientsExcel, downloadClientsWithPlatformsExcel } from "@/lib/excel-utils"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { getClientPlatforms, getClients, createClient, updateClient, updateClientPlatforms, deleteClient } from "@/lib/database"
+import { getClientPlatforms, getClients, createClient, updateClient, updateClientPlatforms, deleteClient, uploadClientFile, getClientFiles, getFileDownloadUrl, deleteClientFile, checkClientFileExists, checkFileSystemAvailable } from "@/lib/database"
 import { useAuth } from "@/components/auth/auth-context"
 import { useRouter } from "next/navigation"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { FileType, FILE_TYPE_LABELS, ClientFile } from "@/lib/types"
 
 const PLATFORMS = ["네이버플레이스", "배달의민족", "쿠팡이츠", "요기요", "땡겨요", "배달이음", "카카오매장"]
 
@@ -99,6 +100,12 @@ export default function ClientsPage() {
     { id: "1", platform: "", platformId: "", platformPassword: "", shopId: "", answerGuide: "" },
   ])
 
+  // 파일 업로드 관련 상태
+  const [uploadingFiles, setUploadingFiles] = useState<{[key in FileType]?: boolean}>({})
+  const [clientFiles, setClientFiles] = useState<ClientFile[]>([])
+  const [isLoadingFiles, setIsLoadingFiles] = useState(false)
+  const [fileSystemAvailable, setFileSystemAvailable] = useState(true)
+
 
 
   // 컴포넌트 마운트 시 클라이언트 목록 로드
@@ -117,6 +124,12 @@ export default function ClientsPage() {
         setClients(data)
         setFilteredClients(data)
       }
+      
+      // 파일 시스템 사용 가능 여부 초기 확인
+      console.log('🔍 파일 시스템 초기 상태 확인 중...')
+      const systemAvailable = await checkFileSystemAvailable()
+      setFileSystemAvailable(systemAvailable)
+      console.log('📁 파일 시스템 상태:', systemAvailable ? '사용 가능' : '사용 불가')
     } catch (error) {
       console.error('Error loading clients:', error)
     }
@@ -187,8 +200,8 @@ export default function ClientsPage() {
     setIsDownloadingExcel(true)
     
     try {
-      // 광고주 상세 정보 (플랫폼 포함) 다운로드 시도
-      const result = await downloadClientsWithPlatformsExcel(dataToDownload, getClientPlatforms, filename)
+      // 광고주 상세 정보 (플랫폼 및 파일 포함) 다운로드 시도
+      const result = await downloadClientsWithPlatformsExcel(dataToDownload, getClientPlatforms, getClientFiles, filename)
       
       if (result.success) {
         console.log('✅ 엑셀 다운로드 성공:', result.filename)
@@ -305,6 +318,138 @@ export default function ClientsPage() {
     })
     setPlatforms([{ id: "1", platform: "", platformId: "", platformPassword: "", shopId: "", answerGuide: "" }])
     setEditingClient(null)
+    setClientFiles([])
+    setUploadingFiles({})
+  }
+
+  // 파일 업로드 함수
+  const handleFileUpload = async (fileType: FileType, file: File, clientId?: number) => {
+    if (!file) return
+
+    const targetClientId = clientId || editingClient?.id
+    if (!targetClientId) {
+      alert('❌ 클라이언트 ID를 찾을 수 없습니다.')
+      return
+    }
+
+    try {
+      setUploadingFiles(prev => ({ ...prev, [fileType]: true }))
+
+      const result = await uploadClientFile({
+        client_id: targetClientId,
+        file_type: fileType,
+        file: file
+      })
+
+      if (result.success) {
+        console.log('✅ 파일 업로드 성공:', result.file_id)
+        alert(`✅ ${FILE_TYPE_LABELS[fileType]} 파일이 성공적으로 업로드되었습니다!`)
+        
+        // 파일 목록 새로고침
+        if (editingClient) {
+          await loadClientFiles(targetClientId)
+        }
+      } else {
+        console.error('❌ 파일 업로드 실패:', result.error)
+        alert(`❌ ${result.error}`)
+      }
+    } catch (error: any) {
+      console.error('💥 파일 업로드 중 예외:', error)
+      alert(`❌ 파일 업로드 중 오류가 발생했습니다: ${error.message || '알 수 없는 오류'}`)
+    } finally {
+      setUploadingFiles(prev => ({ ...prev, [fileType]: false }))
+    }
+  }
+
+  // 클라이언트 파일 목록 로드
+  const loadClientFiles = async (clientId: number) => {
+    try {
+      setIsLoadingFiles(true)
+      console.log('📁 클라이언트 파일 목록 로딩:', clientId)
+
+      const { data, error } = await getClientFiles(clientId)
+      
+      console.log('📁 파일 목록 조회 결과:', { data, error, hasError: !!error })
+      
+      if (error) {
+        console.error('❌ 파일 목록 로딩 실패:', {
+          errorType: typeof error,
+          errorKeys: error ? Object.keys(error) : [],
+          errorStringified: JSON.stringify(error),
+          error
+        })
+        setClientFiles([])
+        setFileSystemAvailable(false)
+        console.log('ℹ️ 파일 시스템을 비활성화합니다. (데이터베이스 설정이 필요할 수 있습니다)')
+      } else {
+        console.log('✅ 파일 목록 로딩 성공:', data?.length || 0)
+        setClientFiles(data || [])
+        
+        // 빈 배열이라도 에러가 없으면 파일 시스템은 활성화
+        setFileSystemAvailable(true)
+      }
+    } catch (error) {
+      console.error('💥 파일 목록 로딩 중 예외:', error)
+      setClientFiles([])
+    } finally {
+      setIsLoadingFiles(false)
+    }
+  }
+
+  // 파일 다운로드
+  const handleFileDownload = async (file: ClientFile) => {
+    try {
+      console.log('📥 파일 다운로드 시작:', file.file_name)
+
+      const { url, error } = await getFileDownloadUrl(file.file_path)
+      
+      if (error || !url) {
+        console.error('❌ 다운로드 URL 생성 실패:', error)
+        alert('❌ 파일 다운로드에 실패했습니다.')
+        return
+      }
+
+      // 새 창에서 파일 다운로드
+      const link = document.createElement('a')
+      link.href = url
+      link.download = file.file_name
+      link.target = '_blank'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+
+      console.log('✅ 파일 다운로드 시작됨')
+    } catch (error: any) {
+      console.error('💥 파일 다운로드 중 예외:', error)
+      alert(`❌ 파일 다운로드 중 오류가 발생했습니다: ${error.message || '알 수 없는 오류'}`)
+    }
+  }
+
+  // 파일 삭제
+  const handleFileDelete = async (file: ClientFile) => {
+    if (!confirm(`"${file.file_name}" 파일을 삭제하시겠습니까?\n\n삭제된 파일은 복구할 수 없습니다.`)) {
+      return
+    }
+
+    try {
+      console.log('🗑️ 파일 삭제 시작:', file.file_name)
+
+      const result = await deleteClientFile(file.id)
+      
+      if (result.success) {
+        console.log('✅ 파일 삭제 성공')
+        alert('✅ 파일이 성공적으로 삭제되었습니다!')
+        
+        // 파일 목록에서 제거
+        setClientFiles(prev => prev.filter(f => f.id !== file.id))
+      } else {
+        console.error('❌ 파일 삭제 실패:', result.error)
+        alert(`❌ ${result.error}`)
+      }
+    } catch (error: any) {
+      console.error('💥 파일 삭제 중 예외:', error)
+      alert(`❌ 파일 삭제 중 오류가 발생했습니다: ${error.message || '알 수 없는 오류'}`)
+    }
   }
 
   const openNewClientDialog = () => {
@@ -355,6 +500,25 @@ export default function ClientsPage() {
         console.log('ℹ️ 기존 플랫폼 정보 없음 - 빈 상태로 시작')
         // 기존 플랫폼 정보가 없으면 빈 플랫폼 하나로 시작
         setPlatforms([{ id: "1", platform: "", platformId: "", platformPassword: "", shopId: "", answerGuide: "" }])
+      }
+      
+      // 파일 시스템 사용 가능 여부 먼저 확인
+      console.log('🔍 파일 시스템 사용 가능 여부 확인 중...')
+      const systemAvailable = await checkFileSystemAvailable()
+      setFileSystemAvailable(systemAvailable)
+      
+      // 파일 시스템이 사용 가능한 경우에만 파일 목록 로드
+      if (systemAvailable) {
+        console.log('📁 기존 파일 목록 로딩 중...')
+        try {
+          await loadClientFiles(client.id)
+        } catch (error) {
+          console.warn('⚠️ 파일 목록 로딩 실패 - 계속 진행:', error)
+          setClientFiles([])
+        }
+      } else {
+        console.log('ℹ️ 파일 시스템을 사용할 수 없으므로 파일 목록 로딩을 건너뜁니다.')
+        setClientFiles([])
       }
       
       // 다이얼로그 열기
@@ -819,6 +983,342 @@ export default function ClientsPage() {
                   </div>
                 </div>
 
+                {/* 파일 업로드 섹션 */}
+                {editingClient && (
+                  <div className="space-y-4">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-6 bg-green-600 rounded-full"></div>
+                      <h3 className="text-lg font-semibold text-gray-900">파일 관리</h3>
+                      {!fileSystemAvailable && (
+                        <Badge variant="outline" className="text-xs text-orange-600 border-orange-300">
+                          설정 필요
+                        </Badge>
+                      )}
+                    </div>
+
+                    {!fileSystemAvailable && (
+                      <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                        <div className="flex items-start space-x-3">
+                          <Info className="h-5 w-5 text-orange-600 mt-0.5 flex-shrink-0" />
+                          <div className="space-y-3">
+                            <h4 className="text-sm font-medium text-orange-800">
+                              파일 업로드 기능을 사용하려면 데이터베이스 설정이 필요합니다
+                            </h4>
+                            <div className="text-xs text-orange-700 space-y-2">
+                              <div>
+                                <p className="font-medium">1단계: Supabase 대시보드 → SQL Editor에서 다음을 실행:</p>
+                                <div className="mt-1 bg-orange-100 p-2 rounded text-orange-800 font-mono text-xs">
+                                  add-client-files-table.sql 파일의 내용 전체
+                                </div>
+                              </div>
+                              <div>
+                                <p className="font-medium">2단계: Storage 설정</p>
+                                <p>• Storage → New bucket → 이름: "client-files" (비공개)</p>
+                                <p>• 상세 설정은 SUPABASE_FILE_UPLOAD_SETUP.md 참조</p>
+                              </div>
+                              <div>
+                                <p className="font-medium">3단계: 페이지 새로고침</p>
+                                <div className="flex items-center space-x-2 mt-2">
+                                  <p>설정 완료 후:</p>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={async () => {
+                                      console.log('🔄 파일 시스템 상태 재확인 중...')
+                                      const available = await checkFileSystemAvailable()
+                                      setFileSystemAvailable(available)
+                                      if (available) {
+                                        alert('✅ 파일 시스템이 활성화되었습니다!')
+                                      } else {
+                                        alert('❌ 아직 설정이 완료되지 않았습니다. 설정을 다시 확인해주세요.')
+                                      }
+                                    }}
+                                    className="h-6 px-2 text-xs bg-orange-200 hover:bg-orange-300 text-orange-800 border-orange-300"
+                                  >
+                                    상태 재확인
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {fileSystemAvailable && (
+                      <>
+                        <div className="grid gap-4 md:grid-cols-3">
+                          {/* 신분증 */}
+                          <div className="border border-gray-200 rounded-lg p-4 space-y-3">
+                            <div className="flex items-center space-x-2">
+                              <File className="h-4 w-4 text-blue-600" />
+                              <h4 className="font-medium text-gray-900">신분증</h4>
+                            </div>
+                            
+                            {/* 기존 파일 표시 */}
+                            {clientFiles.find(f => f.file_type === 'id_card') ? (
+                              <div className="space-y-2">
+                                {(() => {
+                                  const file = clientFiles.find(f => f.file_type === 'id_card')!
+                                  return (
+                                    <div className="bg-gray-50 rounded p-2">
+                                      <p className="text-xs font-medium text-gray-900 truncate">{file.file_name}</p>
+                                      <p className="text-xs text-gray-500">
+                                        {(file.file_size / 1024).toFixed(1)}KB · {new Date(file.uploaded_at).toLocaleDateString()}
+                                      </p>
+                                      <div className="flex space-x-1 mt-2">
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => handleFileDownload(file)}
+                                          className="h-6 px-2 text-xs"
+                                        >
+                                          <Download className="h-3 w-3 mr-1" />
+                                          다운로드
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => handleFileDelete(file)}
+                                          className="h-6 px-2 text-xs text-red-600 hover:text-red-700"
+                                        >
+                                          <Trash2 className="h-3 w-3 mr-1" />
+                                          삭제
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  )
+                                })()}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-gray-500">업로드된 파일이 없습니다.</p>
+                            )}
+
+                            {/* 파일 업로드 */}
+                            <div className="space-y-2">
+                              <input
+                                type="file"
+                                id="id_card_upload"
+                                accept="image/*,.pdf,.doc,.docx"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0]
+                                  if (file && editingClient) {
+                                    handleFileUpload('id_card', file, editingClient.id)
+                                  }
+                                }}
+                                className="hidden"
+                              />
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => document.getElementById('id_card_upload')?.click()}
+                                disabled={uploadingFiles.id_card}
+                                className="w-full h-8 text-xs"
+                              >
+                                {uploadingFiles.id_card ? (
+                                  <>
+                                    <div className="animate-spin rounded-full h-3 w-3 border-b border-gray-600 mr-1"></div>
+                                    업로드 중...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Upload className="h-3 w-3 mr-1" />
+                                    파일 선택
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+
+                          {/* 계약서 */}
+                          <div className="border border-gray-200 rounded-lg p-4 space-y-3">
+                            <div className="flex items-center space-x-2">
+                              <Paperclip className="h-4 w-4 text-purple-600" />
+                              <h4 className="font-medium text-gray-900">계약서</h4>
+                            </div>
+                            
+                            {/* 기존 파일 표시 */}
+                            {clientFiles.find(f => f.file_type === 'contract') ? (
+                              <div className="space-y-2">
+                                {(() => {
+                                  const file = clientFiles.find(f => f.file_type === 'contract')!
+                                  return (
+                                    <div className="bg-gray-50 rounded p-2">
+                                      <p className="text-xs font-medium text-gray-900 truncate">{file.file_name}</p>
+                                      <p className="text-xs text-gray-500">
+                                        {(file.file_size / 1024).toFixed(1)}KB · {new Date(file.uploaded_at).toLocaleDateString()}
+                                      </p>
+                                      <div className="flex space-x-1 mt-2">
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => handleFileDownload(file)}
+                                          className="h-6 px-2 text-xs"
+                                        >
+                                          <Download className="h-3 w-3 mr-1" />
+                                          다운로드
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => handleFileDelete(file)}
+                                          className="h-6 px-2 text-xs text-red-600 hover:text-red-700"
+                                        >
+                                          <Trash2 className="h-3 w-3 mr-1" />
+                                          삭제
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  )
+                                })()}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-gray-500">업로드된 파일이 없습니다.</p>
+                            )}
+
+                            {/* 파일 업로드 */}
+                            <div className="space-y-2">
+                              <input
+                                type="file"
+                                id="contract_upload"
+                                accept="image/*,.pdf,.doc,.docx"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0]
+                                  if (file && editingClient) {
+                                    handleFileUpload('contract', file, editingClient.id)
+                                  }
+                                }}
+                                className="hidden"
+                              />
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => document.getElementById('contract_upload')?.click()}
+                                disabled={uploadingFiles.contract}
+                                className="w-full h-8 text-xs"
+                              >
+                                {uploadingFiles.contract ? (
+                                  <>
+                                    <div className="animate-spin rounded-full h-3 w-3 border-b border-gray-600 mr-1"></div>
+                                    업로드 중...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Upload className="h-3 w-3 mr-1" />
+                                    파일 선택
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+
+                          {/* CMS 신청서 */}
+                          <div className="border border-gray-200 rounded-lg p-4 space-y-3">
+                            <div className="flex items-center space-x-2">
+                              <File className="h-4 w-4 text-orange-600" />
+                              <h4 className="font-medium text-gray-900">CMS 신청서</h4>
+                            </div>
+                            
+                            {/* 기존 파일 표시 */}
+                            {clientFiles.find(f => f.file_type === 'cms_application') ? (
+                              <div className="space-y-2">
+                                {(() => {
+                                  const file = clientFiles.find(f => f.file_type === 'cms_application')!
+                                  return (
+                                    <div className="bg-gray-50 rounded p-2">
+                                      <p className="text-xs font-medium text-gray-900 truncate">{file.file_name}</p>
+                                      <p className="text-xs text-gray-500">
+                                        {(file.file_size / 1024).toFixed(1)}KB · {new Date(file.uploaded_at).toLocaleDateString()}
+                                      </p>
+                                      <div className="flex space-x-1 mt-2">
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => handleFileDownload(file)}
+                                          className="h-6 px-2 text-xs"
+                                        >
+                                          <Download className="h-3 w-3 mr-1" />
+                                          다운로드
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => handleFileDelete(file)}
+                                          className="h-6 px-2 text-xs text-red-600 hover:text-red-700"
+                                        >
+                                          <Trash2 className="h-3 w-3 mr-1" />
+                                          삭제
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  )
+                                })()}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-gray-500">업로드된 파일이 없습니다.</p>
+                            )}
+
+                            {/* 파일 업로드 */}
+                            <div className="space-y-2">
+                              <input
+                                type="file"
+                                id="cms_application_upload"
+                                accept="image/*,.pdf,.doc,.docx"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0]
+                                  if (file && editingClient) {
+                                    handleFileUpload('cms_application', file, editingClient.id)
+                                  }
+                                }}
+                                className="hidden"
+                              />
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => document.getElementById('cms_application_upload')?.click()}
+                                disabled={uploadingFiles.cms_application}
+                                className="w-full h-8 text-xs"
+                              >
+                                {uploadingFiles.cms_application ? (
+                                  <>
+                                    <div className="animate-spin rounded-full h-3 w-3 border-b border-gray-600 mr-1"></div>
+                                    업로드 중...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Upload className="h-3 w-3 mr-1" />
+                                    파일 선택
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="bg-blue-50 rounded-lg p-3">
+                          <p className="text-xs text-blue-800">
+                            <strong>지원 파일 형식:</strong> JPG, PNG, WebP, PDF, DOC, DOCX
+                            <br />
+                            <strong>최대 파일 크기:</strong> 10MB
+                            <br />
+                            <strong>참고:</strong> 파일 업로드는 수정 모드에서만 가능합니다.
+                          </p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex justify-end space-x-4 pt-6 border-t">
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                     취소
@@ -916,6 +1416,7 @@ export default function ClientsPage() {
                 <TableHead className="font-semibold">지침</TableHead>
                 <TableHead className="font-semibold">서비스</TableHead>
                 <TableHead className="font-semibold">메모</TableHead>
+                <TableHead className="font-semibold">파일</TableHead>
                 <TableHead className="font-semibold">계약개월수</TableHead>
                 <TableHead className="font-semibold">등록일</TableHead>
                 <TableHead className="font-semibold">관리</TableHead>
@@ -969,6 +1470,17 @@ export default function ClientsPage() {
                       <div className="truncate text-sm" title={client.memo || ''}>
                         {client.memo || '-'}
                       </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openEditDialog(client)}
+                        className="h-6 px-2 text-xs text-green-600 hover:text-green-800 hover:bg-green-50"
+                      >
+                        <File className="h-3 w-3 mr-1" />
+                        파일관리
+                      </Button>
                     </TableCell>
                     <TableCell className="text-gray-600 text-center">
                       <Badge variant="secondary" className="bg-green-100 text-green-800">
@@ -1090,6 +1602,15 @@ export default function ClientsPage() {
                     <Badge variant="secondary" className="bg-green-100 text-green-800 text-xs">
                       {client.contractMonths}개월
                     </Badge>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openEditDialog(client)}
+                      className="h-5 px-1 text-xs text-green-600 hover:text-green-800 hover:bg-green-50"
+                    >
+                      <File className="h-3 w-3 mr-1" />
+                      파일
+                    </Button>
                   </div>
                   <span className="text-gray-500">{client.registeredAt}</span>
                 </div>

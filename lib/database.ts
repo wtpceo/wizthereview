@@ -1,4 +1,5 @@
 import { supabase, supabaseAdmin } from './supabase'
+import { FileType, ClientFile, FileUploadRequest, FileUploadResponse } from './types'
 
 // 대행사 관련 함수들
 export async function getAgencies() {
@@ -710,6 +711,316 @@ export async function getDashboardStats(agencyId?: number) {
       data: defaultStats,
       error: error
     }
+  }
+}
+
+// 파일 관리 관련 함수들
+
+// 파일 시스템 테이블 존재 여부 확인
+export async function checkFileSystemAvailable(): Promise<boolean> {
+  try {
+    console.log('🔍 파일 시스템 테이블 존재 여부 확인 중...')
+    
+    const { error } = await supabase
+      .from('client_files')
+      .select('id')
+      .limit(1)
+      .maybeSingle()
+    
+    if (error) {
+      if (error.code === '42P01' || 
+          error.message?.includes('does not exist') ||
+          error.message?.includes('relation') ||
+          error.details?.includes('does not exist')) {
+        console.log('❌ client_files 테이블이 존재하지 않습니다.')
+        return false
+      }
+      console.warn('⚠️ 파일 시스템 확인 중 에러:', error)
+      return false
+    }
+    
+    console.log('✅ 파일 시스템 사용 가능')
+    return true
+  } catch (error: any) {
+    console.error('💥 파일 시스템 확인 중 예외:', error)
+    return false
+  }
+}
+
+// 클라이언트 파일 업로드
+export async function uploadClientFile(request: FileUploadRequest): Promise<FileUploadResponse> {
+  try {
+    console.log('📁 파일 업로드 시작:', {
+      client_id: request.client_id,
+      file_type: request.file_type,
+      file_name: request.file.name,
+      file_size: request.file.size
+    })
+
+    // 파일 확장자 및 MIME 타입 검증
+    const allowedTypes = [
+      'image/jpeg', 'image/jpg', 'image/png', 'image/webp',
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ]
+
+    if (!allowedTypes.includes(request.file.type)) {
+      return {
+        success: false,
+        error: '지원하지 않는 파일 형식입니다. (JPG, PNG, WebP, PDF, DOC, DOCX만 허용)'
+      }
+    }
+
+    // 파일 크기 제한 (10MB)
+    const maxSize = 10 * 1024 * 1024 // 10MB
+    if (request.file.size > maxSize) {
+      return {
+        success: false,
+        error: '파일 크기가 너무 큽니다. (최대 10MB)'
+      }
+    }
+
+    // 파일 경로 생성
+    const fileExtension = request.file.name.split('.').pop()
+    const fileName = `${request.client_id}_${request.file_type}_${Date.now()}.${fileExtension}`
+    const filePath = `clients/${request.client_id}/${fileName}`
+
+    console.log('📂 Supabase Storage 업로드 중...', filePath)
+
+    // Supabase Storage에 파일 업로드
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('client-files')
+      .upload(filePath, request.file, {
+        cacheControl: '3600',
+        upsert: false
+      })
+
+    if (uploadError) {
+      console.error('❌ Storage 업로드 실패:', uploadError)
+      return {
+        success: false,
+        error: `파일 업로드에 실패했습니다: ${uploadError.message}`
+      }
+    }
+
+    console.log('✅ Storage 업로드 성공:', uploadData.path)
+
+    // 데이터베이스에 파일 정보 저장
+    console.log('💾 DB 파일 정보 저장 중...')
+    
+    const { data: fileData, error: dbError } = await supabase
+      .from('client_files')
+      .upsert({
+        client_id: request.client_id,
+        file_type: request.file_type,
+        file_name: request.file.name,
+        file_path: uploadData.path,
+        file_size: request.file.size,
+        mime_type: request.file.type,
+        uploaded_by: (await supabase.auth.getUser()).data.user?.id || 'unknown'
+      }, {
+        onConflict: 'client_id,file_type'
+      })
+      .select()
+      .single()
+
+    if (dbError) {
+      console.error('❌ DB 저장 실패:', dbError)
+      
+      // 테이블이 존재하지 않는 경우
+      if (dbError.code === '42P01' || 
+          dbError.message?.includes('does not exist') ||
+          dbError.message?.includes('relation') ||
+          dbError.details?.includes('does not exist')) {
+        return {
+          success: false,
+          error: 'client_files 테이블이 존재하지 않습니다. 먼저 add-client-files-table.sql을 실행하여 데이터베이스 설정을 완료해주세요.'
+        }
+      }
+      
+      // Storage에서 업로드된 파일 삭제 (롤백)
+      await supabase.storage
+        .from('client-files')
+        .remove([uploadData.path])
+
+      return {
+        success: false,
+        error: `파일 정보 저장에 실패했습니다: ${dbError.message}`
+      }
+    }
+
+    console.log('🎉 파일 업로드 완료:', fileData.id)
+
+    return {
+      success: true,
+      file_id: fileData.id,
+      file_path: uploadData.path
+    }
+
+  } catch (error: any) {
+    console.error('💥 파일 업로드 중 예외:', error)
+    return {
+      success: false,
+      error: `파일 업로드 중 오류가 발생했습니다: ${error.message || '알 수 없는 오류'}`
+    }
+  }
+}
+
+// 클라이언트 파일 목록 조회
+export async function getClientFiles(clientId: number): Promise<{ data: ClientFile[] | null; error: any }> {
+  try {
+    console.log('📁 클라이언트 파일 목록 조회:', clientId)
+
+    const { data, error } = await supabase
+      .from('client_files')
+      .select('*')
+      .eq('client_id', clientId)
+      .order('uploaded_at', { ascending: false })
+
+    if (error) {
+      console.error('❌ 파일 목록 조회 실패:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        fullError: JSON.stringify(error, null, 2)
+      })
+      
+      // 테이블이 존재하지 않는 경우 빈 배열 반환
+      if (error.code === '42P01' || 
+          error.message?.includes('does not exist') || 
+          error.message?.includes('relation') ||
+          error.details?.includes('does not exist')) {
+        console.log('ℹ️ client_files 테이블이 존재하지 않습니다. 빈 목록을 반환합니다.')
+        return { data: [], error: null }
+      }
+      
+      return { data: [], error: null } // 모든 에러에 대해 빈 배열 반환하도록 변경
+    }
+
+    console.log('✅ 파일 목록 조회 성공:', data?.length || 0, '개')
+    return { data: data || [], error: null }
+
+  } catch (error: any) {
+    console.error('💥 파일 목록 조회 중 예외:', {
+      name: error?.name,
+      message: error?.message,
+      code: error?.code,
+      stack: error?.stack,
+      fullError: JSON.stringify(error, null, 2)
+    })
+    
+    // 모든 예외에 대해 빈 배열 반환 (테이블이 없을 가능성이 높음)
+    console.log('ℹ️ 파일 목록 조회 실패 - 빈 목록을 반환합니다. (테이블이 없을 수 있습니다)')
+    return { data: [], error: null }
+  }
+}
+
+// 파일 다운로드 URL 생성
+export async function getFileDownloadUrl(filePath: string): Promise<{ url: string | null; error: any }> {
+  try {
+    console.log('🔗 파일 다운로드 URL 생성:', filePath)
+
+    const { data, error } = await supabase.storage
+      .from('client-files')
+      .createSignedUrl(filePath, 3600) // 1시간 유효
+
+    if (error) {
+      console.error('❌ 다운로드 URL 생성 실패:', error)
+      return { url: null, error }
+    }
+
+    console.log('✅ 다운로드 URL 생성 성공')
+    return { url: data.signedUrl, error: null }
+
+  } catch (error) {
+    console.error('💥 다운로드 URL 생성 중 예외:', error)
+    return { url: null, error }
+  }
+}
+
+// 파일 삭제
+export async function deleteClientFile(fileId: number): Promise<{ success: boolean; error?: string }> {
+  try {
+    console.log('🗑️ 파일 삭제 시작:', fileId)
+
+    // 먼저 파일 정보 조회
+    const { data: fileInfo, error: selectError } = await supabase
+      .from('client_files')
+      .select('file_path')
+      .eq('id', fileId)
+      .single()
+
+    if (selectError || !fileInfo) {
+      console.error('❌ 파일 정보 조회 실패:', selectError)
+      return {
+        success: false,
+        error: '파일 정보를 찾을 수 없습니다.'
+      }
+    }
+
+    // Storage에서 파일 삭제
+    console.log('🗂️ Storage 파일 삭제:', fileInfo.file_path)
+    const { error: storageError } = await supabase.storage
+      .from('client-files')
+      .remove([fileInfo.file_path])
+
+    if (storageError) {
+      console.error('❌ Storage 파일 삭제 실패:', storageError)
+      // Storage 삭제 실패해도 DB에서는 삭제 진행
+    }
+
+    // 데이터베이스에서 파일 정보 삭제
+    console.log('💾 DB 파일 정보 삭제')
+    const { error: dbError } = await supabase
+      .from('client_files')
+      .delete()
+      .eq('id', fileId)
+
+    if (dbError) {
+      console.error('❌ DB 파일 삭제 실패:', dbError)
+      return {
+        success: false,
+        error: `파일 삭제에 실패했습니다: ${dbError.message}`
+      }
+    }
+
+    console.log('✅ 파일 삭제 완료')
+    return { success: true }
+
+  } catch (error: any) {
+    console.error('💥 파일 삭제 중 예외:', error)
+    return {
+      success: false,
+      error: `파일 삭제 중 오류가 발생했습니다: ${error.message || '알 수 없는 오류'}`
+    }
+  }
+}
+
+// 파일 타입별 존재 여부 확인
+export async function checkClientFileExists(clientId: number, fileType: FileType): Promise<{ exists: boolean; fileId?: number }> {
+  try {
+    const { data, error } = await supabase
+      .from('client_files')
+      .select('id')
+      .eq('client_id', clientId)
+      .eq('file_type', fileType)
+      .maybeSingle()
+
+    if (error) {
+      console.error('❌ 파일 존재 여부 확인 실패:', error)
+      return { exists: false }
+    }
+
+    return {
+      exists: !!data,
+      fileId: data?.id
+    }
+
+  } catch (error) {
+    console.error('💥 파일 존재 여부 확인 중 예외:', error)
+    return { exists: false }
   }
 }
 
