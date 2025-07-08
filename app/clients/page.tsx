@@ -52,6 +52,8 @@ interface Client {
   registeredAt: string
   agency: string
   memo?: string
+  guide?: string
+  service?: string
   contractMonths: number
 }
 
@@ -88,6 +90,8 @@ export default function ClientsPage() {
     businessNumber: "",
     ownerPhone: "",
     memo: "",
+    guide: "",
+    service: "",
     contractMonths: 12,
   })
 
@@ -295,6 +299,8 @@ export default function ClientsPage() {
       businessNumber: "",
       ownerPhone: "",
       memo: "",
+      guide: "",
+      service: "",
       contractMonths: 12,
     })
     setPlatforms([{ id: "1", platform: "", platformId: "", platformPassword: "", shopId: "", answerGuide: "" }])
@@ -316,6 +322,8 @@ export default function ClientsPage() {
         businessNumber: client.businessNumber,
         ownerPhone: client.ownerPhone,
         memo: client.memo || "",
+        guide: client.guide || "",
+        service: client.service || "",
         contractMonths: client.contractMonths || 12,
       })
       setEditingClient(client)
@@ -396,6 +404,8 @@ export default function ClientsPage() {
           business_number: formData.businessNumber,
           owner_phone: formData.ownerPhone,
           memo: formData.memo,
+          guide: formData.guide,
+          service: formData.service,
           contract_months: formData.contractMonths
         })
 
@@ -440,6 +450,8 @@ export default function ClientsPage() {
           owner_phone: formData.ownerPhone,
           agency_id: targetAgencyId,
           memo: formData.memo,
+          guide: formData.guide,
+          service: formData.service,
           contract_months: formData.contractMonths,
           platforms: platformData
         })
@@ -650,6 +662,35 @@ export default function ClientsPage() {
                       onChange={(e) => setFormData({ ...formData, memo: e.target.value })}
                       className="focus:ring-2 focus:ring-blue-500"
                     />
+                  </div>
+                  
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="guide" className="text-sm font-medium">
+                        지침
+                      </Label>
+                      <Textarea
+                        id="guide"
+                        placeholder="관리 지침이나 가이드를 입력하세요"
+                        value={formData.guide}
+                        onChange={(e) => setFormData({ ...formData, guide: e.target.value })}
+                        className="focus:ring-2 focus:ring-blue-500"
+                        rows={3}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="service" className="text-sm font-medium">
+                        서비스
+                      </Label>
+                      <Textarea
+                        id="service"
+                        placeholder="제공하는 서비스 내용을 입력하세요"
+                        value={formData.service}
+                        onChange={(e) => setFormData({ ...formData, service: e.target.value })}
+                        className="focus:ring-2 focus:ring-blue-500"
+                        rows={3}
+                      />
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="contractMonths" className="text-sm font-medium">
@@ -872,6 +913,9 @@ export default function ClientsPage() {
                 <TableHead className="font-semibold">연락처</TableHead>
                 <TableHead className="font-semibold">플랫폼</TableHead>
                 <TableHead className="font-semibold">대행사</TableHead>
+                <TableHead className="font-semibold">지침</TableHead>
+                <TableHead className="font-semibold">서비스</TableHead>
+                <TableHead className="font-semibold">메모</TableHead>
                 <TableHead className="font-semibold">계약개월수</TableHead>
                 <TableHead className="font-semibold">등록일</TableHead>
                 <TableHead className="font-semibold">관리</TableHead>
@@ -910,6 +954,21 @@ export default function ClientsPage() {
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">{client.agency}</Badge>
+                    </TableCell>
+                    <TableCell className="text-gray-600 max-w-32">
+                      <div className="truncate text-sm" title={client.guide || ''}>
+                        {client.guide || '-'}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-gray-600 max-w-32">
+                      <div className="truncate text-sm" title={client.service || ''}>
+                        {client.service || '-'}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-gray-600 max-w-32">
+                      <div className="truncate text-sm" title={client.memo || ''}>
+                        {client.memo || '-'}
+                      </div>
                     </TableCell>
                     <TableCell className="text-gray-600 text-center">
                       <Badge variant="secondary" className="bg-green-100 text-green-800">
@@ -1000,6 +1059,28 @@ export default function ClientsPage() {
                       <Info className="h-3 w-3 mr-1" />
                       정보보기
                     </Button>
+                  )}
+                </div>
+                
+                {/* 추가 정보 */}
+                <div className="space-y-2">
+                  {client.guide && (
+                    <div className="text-xs">
+                      <span className="font-medium text-gray-700">지침:</span>
+                      <p className="text-gray-600 mt-1 line-clamp-2">{client.guide}</p>
+                    </div>
+                  )}
+                  {client.service && (
+                    <div className="text-xs">
+                      <span className="font-medium text-gray-700">서비스:</span>
+                      <p className="text-gray-600 mt-1 line-clamp-2">{client.service}</p>
+                    </div>
+                  )}
+                  {client.memo && (
+                    <div className="text-xs">
+                      <span className="font-medium text-gray-700">메모:</span>
+                      <p className="text-gray-600 mt-1 line-clamp-2">{client.memo}</p>
+                    </div>
                   )}
                 </div>
                 

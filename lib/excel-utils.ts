@@ -8,6 +8,8 @@ export interface ExcelClient {
   대행사: string
   등록일: string
   메모?: string
+  지침?: string
+  서비스?: string
   계약개월수: number
 }
 
@@ -43,6 +45,8 @@ export const downloadClientsWithPlatformsExcel = async (
       대행사: client.agency,
       등록일: client.registeredAt,
       메모: client.memo || "",
+      지침: client.guide || "",
+      서비스: client.service || "",
       계약개월수: client.contractMonths || 12,
     }))
 
@@ -55,6 +59,8 @@ export const downloadClientsWithPlatformsExcel = async (
       { wch: 15 }, // 대행사
       { wch: 12 }, // 등록일
       { wch: 30 }, // 메모
+      { wch: 25 }, // 지침
+      { wch: 25 }, // 서비스
       { wch: 12 }, // 계약개월수
     ]
     basicWorksheet["!cols"] = basicColWidths
@@ -227,6 +233,8 @@ export const downloadClientsExcel = (clients: any[], filename = "광고주_목�
     대행사: client.agency,
     등록일: client.registeredAt,
     메모: client.memo || "",
+    지침: client.guide || "",
+    서비스: client.service || "",
     계약개월수: client.contractMonths || 12,
   }))
 
@@ -243,6 +251,8 @@ export const downloadClientsExcel = (clients: any[], filename = "광고주_목�
     { wch: 15 }, // 대행사
     { wch: 12 }, // 등록일
     { wch: 30 }, // 메모
+    { wch: 25 }, // 지침
+    { wch: 25 }, // 서비스
     { wch: 12 }, // 계약개월수
   ]
   worksheet["!cols"] = colWidths

@@ -252,6 +252,8 @@ export async function getClients(agencyId?: number) {
       registeredAt: client.created_at ? client.created_at.split('T')[0] : '',
       agency: client.agency?.name || '',
       memo: client.memo || '',
+      guide: client.guide || '',
+      service: client.service || '',
       contractMonths: client.contract_months || 12
     }))
 
@@ -274,6 +276,8 @@ export async function createClient(client: {
   owner_phone: string
   agency_id: number
   memo?: string
+  guide?: string
+  service?: string
   contract_months?: number
   platforms?: Array<{
     platform_name: string
@@ -320,6 +324,8 @@ export async function createClient(client: {
         owner_phone: client.owner_phone,
         agency_id: client.agency_id,
         memo: client.memo,
+        guide: client.guide,
+        service: client.service,
         contract_months: client.contract_months || 12
       }])
       .select()
@@ -422,6 +428,8 @@ export async function updateClient(
     business_number?: string
     owner_phone?: string
     memo?: string
+    guide?: string
+    service?: string
     contract_months?: number
   }
 ) {
