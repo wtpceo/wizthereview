@@ -51,6 +51,7 @@ export interface Client {
   agency_id: number;
   agency_name?: string;
   memo?: string;
+  contract_months: number;
   created_at: string;
   updated_at: string;
 }

@@ -52,6 +52,7 @@ interface Client {
   registeredAt: string
   agency: string
   memo?: string
+  contractMonths: number
 }
 
 export default function ClientsPage() {
@@ -87,6 +88,7 @@ export default function ClientsPage() {
     businessNumber: "",
     ownerPhone: "",
     memo: "",
+    contractMonths: 12,
   })
 
   const [platforms, setPlatforms] = useState<PlatformInfo[]>([
@@ -181,20 +183,47 @@ export default function ClientsPage() {
     setIsDownloadingExcel(true)
     
     try {
-      // 첫 번째 클라이언트로 플랫폼 정보 테스트
-      if (dataToDownload.length > 0) {
-        console.log('🧪 첫 번째 클라이언트 플랫폼 정보 테스트:', dataToDownload[0])
-        const testResult = await getClientPlatforms(dataToDownload[0].id)
-        console.log('🧪 테스트 결과:', testResult)
-      }
+      // 광고주 상세 정보 (플랫폼 포함) 다운로드 시도
+      const result = await downloadClientsWithPlatformsExcel(dataToDownload, getClientPlatforms, filename)
       
-      await downloadClientsWithPlatformsExcel(dataToDownload, getClientPlatforms, filename)
-      console.log('✅ 엑셀 다운로드 성공')
+      if (result.success) {
+        console.log('✅ 엑셀 다운로드 성공:', result.filename)
+        
+        // 사용자에게 다운로드 결과 알림
+        const { 총_광고주수, 플랫폼_조회_성공, 플랫폼_조회_실패 } = result.summary
+        
+        if (플랫폼_조회_실패 > 0) {
+          alert(`📊 엑셀 다운로드 완료!\n\n` +
+            `✅ 총 ${총_광고주수}개 광고주 정보 다운로드\n` +
+            `✅ ${플랫폼_조회_성공}개 광고주의 플랫폼 정보 포함\n` +
+            `⚠️ ${플랫폼_조회_실패}개 광고주의 플랫폼 정보 조회 실패\n\n` +
+            `※ 파일명: ${result.filename}\n` +
+            `※ 플랫폼 정보는 "2. 플랫폼 계정정보" 시트에서 확인하세요.`)
+        } else {
+          alert(`📊 엑셀 다운로드 완료!\n\n` +
+            `✅ 총 ${총_광고주수}개 광고주 정보 다운로드\n` +
+            `✅ 모든 플랫폼 정보 포함\n\n` +
+            `※ 파일명: ${result.filename}\n` +
+            `※ 플랫폼 정보는 "2. 플랫폼 계정정보" 시트에서 확인하세요.`)
+        }
+      }
     } catch (error) {
       console.error('❌ 엑셀 다운로드 중 오류가 발생했습니다:', error)
+      
       // 실패시 기본 다운로드로 fallback
       console.log('🔄 기본 엑셀 다운로드로 fallback')
-      downloadClientsExcel(dataToDownload, filename)
+      try {
+        downloadClientsExcel(dataToDownload, filename)
+        alert(`⚠️ 플랫폼 정보 조회에 실패하여 기본 정보만 다운로드됩니다.\n\n` +
+          `✅ 총 ${dataToDownload.length}개 광고주 기본 정보 다운로드\n` +
+          `❌ 플랫폼 계정 정보는 포함되지 않습니다.\n\n` +
+          `※ 플랫폼 정보가 필요하시면 새로고침 후 다시 시도해주세요.`)
+      } catch (fallbackError: any) {
+        console.error('❌ 기본 엑셀 다운로드도 실패:', fallbackError)
+        alert(`❌ 엑셀 다운로드에 실패했습니다.\n\n` +
+          `오류: ${fallbackError?.message || '알 수 없는 오류'}\n\n` +
+          `※ 페이지를 새로고침 후 다시 시도해주세요.`)
+      }
     } finally {
       setIsDownloadingExcel(false)
     }
@@ -266,6 +295,7 @@ export default function ClientsPage() {
       businessNumber: "",
       ownerPhone: "",
       memo: "",
+      contractMonths: 12,
     })
     setPlatforms([{ id: "1", platform: "", platformId: "", platformPassword: "", shopId: "", answerGuide: "" }])
     setEditingClient(null)
@@ -286,6 +316,7 @@ export default function ClientsPage() {
         businessNumber: client.businessNumber,
         ownerPhone: client.ownerPhone,
         memo: client.memo || "",
+        contractMonths: client.contractMonths || 12,
       })
       setEditingClient(client)
       
@@ -364,7 +395,8 @@ export default function ClientsPage() {
           store_name: formData.storeName,
           business_number: formData.businessNumber,
           owner_phone: formData.ownerPhone,
-          memo: formData.memo
+          memo: formData.memo,
+          contract_months: formData.contractMonths
         })
 
         if (error) {
@@ -408,6 +440,7 @@ export default function ClientsPage() {
           owner_phone: formData.ownerPhone,
           agency_id: targetAgencyId,
           memo: formData.memo,
+          contract_months: formData.contractMonths,
           platforms: platformData
         })
 
@@ -618,6 +651,25 @@ export default function ClientsPage() {
                       className="focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="contractMonths" className="text-sm font-medium">
+                      계약 개월수 <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="contractMonths"
+                      type="number"
+                      min="1"
+                      max="120"
+                      placeholder="계약 개월수를 입력하세요"
+                      value={formData.contractMonths}
+                      onChange={(e) => setFormData({ ...formData, contractMonths: parseInt(e.target.value) || 12 })}
+                      className="focus:ring-2 focus:ring-blue-500"
+                      required
+                    />
+                    <p className="text-xs text-gray-500">
+                      계약 개월수는 1개월 ~ 120개월 사이로 입력해주세요.
+                    </p>
+                  </div>
                 </div>
 
                 {/* 플랫폼 정보 */}
@@ -815,13 +867,14 @@ export default function ClientsPage() {
             <Table>
               <TableHeader className="bg-gray-50">
                 <TableRow>
-                  <TableHead className="font-semibold">매장명</TableHead>
-                  <TableHead className="font-semibold">사업자번호</TableHead>
-                  <TableHead className="font-semibold">연락처</TableHead>
-                  <TableHead className="font-semibold">플랫폼</TableHead>
-                  <TableHead className="font-semibold">대행사</TableHead>
-                  <TableHead className="font-semibold">등록일</TableHead>
-                  <TableHead className="font-semibold">관리</TableHead>
+                                  <TableHead className="font-semibold">매장명</TableHead>
+                <TableHead className="font-semibold">사업자번호</TableHead>
+                <TableHead className="font-semibold">연락처</TableHead>
+                <TableHead className="font-semibold">플랫폼</TableHead>
+                <TableHead className="font-semibold">대행사</TableHead>
+                <TableHead className="font-semibold">계약개월수</TableHead>
+                <TableHead className="font-semibold">등록일</TableHead>
+                <TableHead className="font-semibold">관리</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -857,6 +910,11 @@ export default function ClientsPage() {
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">{client.agency}</Badge>
+                    </TableCell>
+                    <TableCell className="text-gray-600 text-center">
+                      <Badge variant="secondary" className="bg-green-100 text-green-800">
+                        {client.contractMonths}개월
+                      </Badge>
                     </TableCell>
                     <TableCell className="text-gray-600">{client.registeredAt}</TableCell>
                     <TableCell>
@@ -946,7 +1004,12 @@ export default function ClientsPage() {
                 </div>
                 
                 <div className="flex items-center justify-between text-xs">
-                  <Badge variant="outline" className="text-xs">{client.agency}</Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs">{client.agency}</Badge>
+                    <Badge variant="secondary" className="bg-green-100 text-green-800 text-xs">
+                      {client.contractMonths}개월
+                    </Badge>
+                  </div>
                   <span className="text-gray-500">{client.registeredAt}</span>
                 </div>
               </div>

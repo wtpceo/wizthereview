@@ -251,7 +251,8 @@ export async function getClients(agencyId?: number) {
       platforms: client.platforms?.map((p: any) => p.platform_name) || [],
       registeredAt: client.created_at ? client.created_at.split('T')[0] : '',
       agency: client.agency?.name || '',
-      memo: client.memo || ''
+      memo: client.memo || '',
+      contractMonths: client.contract_months || 12
     }))
 
     return { data: transformedData, error: null }
@@ -273,6 +274,7 @@ export async function createClient(client: {
   owner_phone: string
   agency_id: number
   memo?: string
+  contract_months?: number
   platforms?: Array<{
     platform_name: string
     platform_id: string
@@ -317,7 +319,8 @@ export async function createClient(client: {
         business_number: client.business_number,
         owner_phone: client.owner_phone,
         agency_id: client.agency_id,
-        memo: client.memo
+        memo: client.memo,
+        contract_months: client.contract_months || 12
       }])
       .select()
       .single()
@@ -419,6 +422,7 @@ export async function updateClient(
     business_number?: string
     owner_phone?: string
     memo?: string
+    contract_months?: number
   }
 ) {
   try {

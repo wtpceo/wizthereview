@@ -8,6 +8,7 @@ export interface ExcelClient {
   대행사: string
   등록일: string
   메모?: string
+  계약개월수: number
 }
 
 export interface ExcelAgency {
@@ -25,64 +26,136 @@ export const downloadClientsWithPlatformsExcel = async (
   getClientPlatforms: (clientId: number) => Promise<any>,
   filename = "광고주_상세목록"
 ) => {
-  const workbook = XLSX.utils.book_new()
+  try {
+    const workbook = XLSX.utils.book_new()
+    
+    console.log('📊 엑셀 다운로드 시작:', {
+      총_광고주수: clients.length,
+      파일명: filename
+    })
 
-  // 1. 광고주 기본 정보 시트
-  const basicData: ExcelClient[] = clients.map((client) => ({
-    매장명: client.storeName,
-    사업자등록번호: client.businessNumber,
-    사장님휴대폰번호: client.ownerPhone,
-    플랫폼: client.platforms.join(", "),
-    대행사: client.agency,
-    등록일: client.registeredAt,
-    메모: client.memo || "",
-  }))
+    // 1. 광고주 기본 정보 시트
+    const basicData: ExcelClient[] = clients.map((client) => ({
+      매장명: client.storeName,
+      사업자등록번호: client.businessNumber,
+      사장님휴대폰번호: client.ownerPhone,
+      플랫폼: client.platforms.join(", "),
+      대행사: client.agency,
+      등록일: client.registeredAt,
+      메모: client.memo || "",
+      계약개월수: client.contractMonths || 12,
+    }))
 
-  const basicWorksheet = XLSX.utils.json_to_sheet(basicData)
-  const basicColWidths = [
-    { wch: 20 }, // 매장명
-    { wch: 15 }, // 사업자등록번호
-    { wch: 15 }, // 사장님휴대폰번호
-    { wch: 30 }, // 플랫폼
-    { wch: 15 }, // 대행사
-    { wch: 12 }, // 등록일
-    { wch: 30 }, // 메모
-  ]
-  basicWorksheet["!cols"] = basicColWidths
-  XLSX.utils.book_append_sheet(workbook, basicWorksheet, "1. 광고주 기본정보")
+    const basicWorksheet = XLSX.utils.json_to_sheet(basicData)
+    const basicColWidths = [
+      { wch: 20 }, // 매장명
+      { wch: 15 }, // 사업자등록번호
+      { wch: 15 }, // 사장님휴대폰번호
+      { wch: 30 }, // 플랫폼
+      { wch: 15 }, // 대행사
+      { wch: 12 }, // 등록일
+      { wch: 30 }, // 메모
+      { wch: 12 }, // 계약개월수
+    ]
+    basicWorksheet["!cols"] = basicColWidths
+    XLSX.utils.book_append_sheet(workbook, basicWorksheet, "1. 광고주 기본정보")
 
-  // 2. 플랫폼 상세 정보 수집
-  const platformData: any[] = []
-  
-  for (const client of clients) {
-    try {
-      const { data: platforms, error } = await getClientPlatforms(client.id)
-      
-      if (error) {
-        console.error(`플랫폼 정보 조회 에러 (클라이언트 ID: ${client.id}):`, error)
-      } else if (platforms && platforms.length > 0) {
-        platforms.forEach((platform: any) => {
+    // 2. 플랫폼 상세 정보 수집 - 개선된 에러 처리
+    const platformData: any[] = []
+    let successCount = 0
+    let failureCount = 0
+    
+    console.log('🔄 플랫폼 정보 수집 시작...')
+    
+    for (const client of clients) {
+      try {
+        console.log(`🔍 ${client.storeName}(ID: ${client.id}) 플랫폼 정보 조회 중...`)
+        
+        const result = await getClientPlatforms(client.id)
+        
+        if (result.error) {
+          console.error(`❌ ${client.storeName} 플랫폼 정보 조회 실패:`, result.error)
+          failureCount++
+          
+          // 에러가 있어도 기본 정보라도 추가 (플랫폼 정보 없이)
           platformData.push({
             매장명: client.storeName,
             사업자등록번호: client.businessNumber,
             대행사: client.agency,
-            플랫폼명: platform.platform_name,
-            플랫폼아이디: platform.platform_id || '',
-            플랫폼비밀번호: platform.platform_password || '',
-            샵아이디: platform.shop_id || '',
-            답변지침: platform.answer_guide || '',
-            등록일: platform.created_at ? new Date(platform.created_at).toLocaleDateString('ko-KR') : '',
-            수정일: platform.updated_at ? new Date(platform.updated_at).toLocaleDateString('ko-KR') : ''
+            플랫폼명: '정보 조회 실패',
+            플랫폼아이디: '-',
+            플랫폼비밀번호: '-',
+            샵아이디: '-',
+            답변지침: '-',
+            등록일: '-',
+            수정일: '-',
+            상태: '조회 실패'
           })
+        } else if (result.data && result.data.length > 0) {
+          console.log(`✅ ${client.storeName} 플랫폼 정보 조회 성공: ${result.data.length}개`)
+          successCount++
+          
+          result.data.forEach((platform: any) => {
+            platformData.push({
+              매장명: client.storeName,
+              사업자등록번호: client.businessNumber,
+              대행사: client.agency,
+              플랫폼명: platform.platform_name,
+              플랫폼아이디: platform.platform_id || '',
+              플랫폼비밀번호: platform.platform_password || '',
+              샵아이디: platform.shop_id || '',
+              답변지침: platform.answer_guide || '',
+              등록일: platform.created_at ? new Date(platform.created_at).toLocaleDateString('ko-KR') : '',
+              수정일: platform.updated_at ? new Date(platform.updated_at).toLocaleDateString('ko-KR') : '',
+              상태: '정상'
+            })
+          })
+        } else {
+          console.log(`ℹ️ ${client.storeName} 플랫폼 정보 없음`)
+          
+          // 플랫폼 정보가 없는 경우도 표시
+          platformData.push({
+            매장명: client.storeName,
+            사업자등록번호: client.businessNumber,
+            대행사: client.agency,
+            플랫폼명: '등록된 플랫폼 없음',
+            플랫폼아이디: '-',
+            플랫폼비밀번호: '-',
+            샵아이디: '-',
+            답변지침: '-',
+            등록일: '-',
+            수정일: '-',
+            상태: '플랫폼 미등록'
+          })
+        }
+      } catch (error) {
+        console.error(`💥 ${client.storeName} 플랫폼 정보 조회 중 예외 발생:`, error)
+        failureCount++
+        
+        // 예외가 발생해도 기본 정보는 추가
+        platformData.push({
+          매장명: client.storeName,
+          사업자등록번호: client.businessNumber,
+          대행사: client.agency,
+          플랫폼명: '조회 오류',
+          플랫폼아이디: '-',
+          플랫폼비밀번호: '-',
+          샵아이디: '-',
+          답변지침: '-',
+          등록일: '-',
+          수정일: '-',
+          상태: '시스템 오류'
         })
       }
-    } catch (error) {
-      console.error(`플랫폼 정보 조회 중 예외 발생 (클라이언트 ${client.id}):`, error)
     }
-  }
 
-  // 3. 플랫폼 상세 정보 시트
-  if (platformData.length > 0) {
+    console.log('📊 플랫폼 정보 수집 완료:', {
+      성공: successCount,
+      실패: failureCount,
+      총_플랫폼수: platformData.length
+    })
+
+    // 3. 플랫폼 상세 정보 시트 생성
     const platformWorksheet = XLSX.utils.json_to_sheet(platformData)
     const platformColWidths = [
       { wch: 20 }, // 매장명
@@ -95,12 +168,53 @@ export const downloadClientsWithPlatformsExcel = async (
       { wch: 40 }, // 답변지침
       { wch: 12 }, // 등록일
       { wch: 12 }, // 수정일
+      { wch: 12 }, // 상태
     ]
     platformWorksheet["!cols"] = platformColWidths
-    XLSX.utils.book_append_sheet(workbook, platformWorksheet, "2. 플랫폼 계정정보 [중요]")
-  }
+    XLSX.utils.book_append_sheet(workbook, platformWorksheet, "2. 플랫폼 계정정보")
 
-  XLSX.writeFile(workbook, `${filename}_${new Date().toISOString().split("T")[0]}.xlsx`)
+    // 4. 요약 정보 시트 추가
+    const summaryData = [
+      { 구분: '총 광고주 수', 값: clients.length },
+      { 구분: '플랫폼 정보 조회 성공', 값: successCount },
+      { 구분: '플랫폼 정보 조회 실패', 값: failureCount },
+      { 구분: '총 플랫폼 계정 수', 값: platformData.filter(p => p.상태 === '정상').length },
+      { 구분: '다운로드 일시', 값: new Date().toLocaleString('ko-KR') }
+    ]
+    
+    const summaryWorksheet = XLSX.utils.json_to_sheet(summaryData)
+    const summaryColWidths = [
+      { wch: 25 }, // 구분
+      { wch: 20 }, // 값
+    ]
+    summaryWorksheet["!cols"] = summaryColWidths
+    XLSX.utils.book_append_sheet(workbook, summaryWorksheet, "0. 다운로드 요약")
+
+    // 5. 파일 다운로드
+    const finalFilename = `${filename}_${new Date().toISOString().split("T")[0]}.xlsx`
+    XLSX.writeFile(workbook, finalFilename)
+    
+    console.log('✅ 엑셀 다운로드 성공:', finalFilename)
+    
+    // 성공 메시지 표시 (사용자 피드백용)
+    if (failureCount > 0) {
+      console.warn(`⚠️ 일부 플랫폼 정보 조회 실패 (${failureCount}개)`)
+    }
+    
+    return {
+      success: true,
+      filename: finalFilename,
+      summary: {
+        총_광고주수: clients.length,
+        플랫폼_조회_성공: successCount,
+        플랫폼_조회_실패: failureCount,
+        총_플랫폼수: platformData.length
+      }
+    }
+  } catch (error) {
+    console.error('❌ 엑셀 다운로드 중 치명적 오류:', error)
+    throw error
+  }
 }
 
 // 기존 간단한 엑셀 다운로드 (호환성을 위해 유지)
@@ -113,6 +227,7 @@ export const downloadClientsExcel = (clients: any[], filename = "광고주_목�
     대행사: client.agency,
     등록일: client.registeredAt,
     메모: client.memo || "",
+    계약개월수: client.contractMonths || 12,
   }))
 
   const worksheet = XLSX.utils.json_to_sheet(excelData)
@@ -128,6 +243,7 @@ export const downloadClientsExcel = (clients: any[], filename = "광고주_목�
     { wch: 15 }, // 대행사
     { wch: 12 }, // 등록일
     { wch: 30 }, // 메모
+    { wch: 12 }, // 계약개월수
   ]
   worksheet["!cols"] = colWidths
 
