@@ -81,8 +81,7 @@ export default function ClientsPage() {
   // 엑셀 다운로드 로딩 상태
   const [isDownloadingExcel, setIsDownloadingExcel] = useState(false)
   
-  // 비밀번호 표시 상태 (플랫폼 ID별로 관리)
-  const [showPasswords, setShowPasswords] = useState<{[key: number]: boolean}>({})
+  // 복사 상태 관리
   const [copiedItems, setCopiedItems] = useState<{[key: string]: boolean}>({})
 
   // 폼 상태
@@ -686,7 +685,6 @@ export default function ClientsPage() {
     setIsLoadingPlatforms(true)
     setSelectedClientName(clientName)
     setIsPlatformModalOpen(true)
-    setShowPasswords({}) // 비밀번호 표시 상태 초기화
     setCopiedItems({}) // 복사 상태 초기화
     
     try {
@@ -705,13 +703,7 @@ export default function ClientsPage() {
     }
   }
 
-  // 비밀번호 표시/숨김 토글
-  const togglePasswordVisibility = (platformId: number) => {
-    setShowPasswords(prev => ({
-      ...prev,
-      [platformId]: !prev[platformId]
-    }))
-  }
+
 
   // 클립보드 복사 함수
   const copyToClipboard = async (text: string, itemKey: string) => {
@@ -879,22 +871,9 @@ export default function ClientsPage() {
 
                 {/* 플랫폼 정보 */}
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <div className="w-2 h-6 bg-purple-600 rounded-full"></div>
-                      <h3 className="text-lg font-semibold text-gray-900">플랫폼 정보</h3>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={addPlatform}
-                      disabled={platforms.length >= 7}
-                      className="hover:bg-blue-50"
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      플랫폼 추가
-                    </Button>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-6 bg-purple-600 rounded-full"></div>
+                    <h3 className="text-lg font-semibold text-gray-900">플랫폼 정보</h3>
                   </div>
 
                   <div className="space-y-4">
@@ -918,7 +897,8 @@ export default function ClientsPage() {
                           )}
                         </div>
 
-                        <div className="grid gap-4 md:grid-cols-2">
+                        {/* 세로 정렬로 변경 - 사용자 편의성 향상 */}
+                        <div className="space-y-4">
                           <div className="space-y-2">
                             <Label className="text-sm font-medium">플랫폼명</Label>
                             <Select
@@ -937,29 +917,35 @@ export default function ClientsPage() {
                               </SelectContent>
                             </Select>
                           </div>
+                          
                           <div className="space-y-2">
                             <Label className="text-sm font-medium">플랫폼 아이디</Label>
                             <Input
                               value={platform.platformId}
                               onChange={(e) => updatePlatform(platform.id, "platformId", e.target.value)}
                               className="focus:ring-2 focus:ring-blue-500"
+                              placeholder="플랫폼 로그인 아이디를 입력하세요"
                             />
                           </div>
+                          
                           <div className="space-y-2">
                             <Label className="text-sm font-medium">플랫폼 비밀번호</Label>
                             <Input
-                              type="password"
+                              type="text"
                               value={platform.platformPassword}
                               onChange={(e) => updatePlatform(platform.id, "platformPassword", e.target.value)}
                               className="focus:ring-2 focus:ring-blue-500"
+                              placeholder="플랫폼 로그인 비밀번호를 입력하세요"
                             />
                           </div>
+                          
                           <div className="space-y-2">
                             <Label className="text-sm font-medium">샵 아이디</Label>
                             <Input
                               value={platform.shopId}
                               onChange={(e) => updatePlatform(platform.id, "shopId", e.target.value)}
                               className="focus:ring-2 focus:ring-blue-500"
+                              placeholder="샵 아이디를 입력하세요"
                             />
                           </div>
                         </div>
@@ -980,6 +966,21 @@ export default function ClientsPage() {
                         </div>
                       </div>
                     ))}
+                    
+                    {/* 플랫폼 추가 버튼을 아래쪽으로 이동 */}
+                    <div className="flex justify-center pt-4">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={addPlatform}
+                        disabled={platforms.length >= 7}
+                        className="hover:bg-blue-50 px-8"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        플랫폼 추가 ({platforms.length}/7)
+                      </Button>
+                    </div>
                   </div>
                 </div>
 
@@ -1649,9 +1650,9 @@ export default function ClientsPage() {
                   총 {selectedClientPlatforms.length}개의 플랫폼이 등록되어 있습니다.
                 </div>
                 
-                <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-2">
+                <div className="space-y-4">
                   {selectedClientPlatforms.map((platform, index) => (
-                    <div key={platform.id} className="border border-gray-200 rounded-lg p-4 space-y-3 bg-gray-50">
+                    <div key={platform.id} className="border border-gray-200 rounded-lg p-6 space-y-4 bg-gray-50 hover:bg-gray-100 transition-colors">
                       <div className="flex items-center justify-between">
                         <h3 className="font-semibold text-lg text-gray-900">
                           {platform.platform_name}
@@ -1659,104 +1660,89 @@ export default function ClientsPage() {
                         <Badge variant="secondary">플랫폼 {index + 1}</Badge>
                       </div>
                       
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium text-gray-600">플랫폼 아이디:</span>
-                          <div className="flex items-center gap-1">
-                            <span className="font-mono bg-white px-2 py-1 rounded border">
-                              {platform.platform_id || '-'}
-                            </span>
-                            {platform.platform_id && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => copyToClipboard(platform.platform_id, `platform_id_${platform.id}`)}
-                                className="p-1 h-6 w-6"
-                                title="복사"
-                              >
-                                {copiedItems[`platform_id_${platform.id}`] ? (
-                                  <Check className="h-3 w-3 text-green-600" />
-                                ) : (
-                                  <Copy className="h-3 w-3" />
-                                )}
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                        
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium text-gray-600">샵 아이디:</span>
-                          <div className="flex items-center gap-1">
-                            <span className="font-mono bg-white px-2 py-1 rounded border">
-                              {platform.shop_id || '-'}
-                            </span>
-                            {platform.shop_id && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => copyToClipboard(platform.shop_id, `shop_id_${platform.id}`)}
-                                className="p-1 h-6 w-6"
-                                title="복사"
-                              >
-                                {copiedItems[`shop_id_${platform.id}`] ? (
-                                  <Check className="h-3 w-3 text-green-600" />
-                                ) : (
-                                  <Copy className="h-3 w-3" />
-                                )}
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                        
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium text-gray-600">비밀번호:</span>
-                          <div className="flex items-center gap-1">
-                            <span className="font-mono bg-white px-2 py-1 rounded border">
-                              {platform.platform_password ? (
-                                showPasswords[platform.id] ? platform.platform_password : '••••••••'
-                              ) : '-'}
-                            </span>
-                            {platform.platform_password && (
-                              <>
+                      <div className="space-y-3">
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-gray-600 text-sm w-20">플랫폼 아이디:</span>
+                            <div className="flex items-center gap-1 flex-1">
+                              <span className="font-mono bg-white px-3 py-2 rounded border flex-1">
+                                {platform.platform_id || '-'}
+                              </span>
+                              {platform.platform_id && (
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  onClick={() => togglePasswordVisibility(platform.id)}
-                                  className="p-1 h-6 w-6"
-                                  title={showPasswords[platform.id] ? "비밀번호 숨기기" : "비밀번호 보기"}
+                                  onClick={() => copyToClipboard(platform.platform_id, `platform_id_${platform.id}`)}
+                                  className="p-2 h-8 w-8"
+                                  title="복사"
                                 >
-                                  {showPasswords[platform.id] ? (
-                                    <EyeOff className="h-3 w-3" />
+                                  {copiedItems[`platform_id_${platform.id}`] ? (
+                                    <Check className="h-4 w-4 text-green-600" />
                                   ) : (
-                                    <Eye className="h-3 w-3" />
+                                    <Copy className="h-4 w-4" />
                                   )}
                                 </Button>
+                              )}
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-gray-600 text-sm w-20">비밀번호:</span>
+                            <div className="flex items-center gap-1 flex-1">
+                              <span className="font-mono bg-white px-3 py-2 rounded border flex-1">
+                                {platform.platform_password || '-'}
+                              </span>
+                              {platform.platform_password && (
                                 <Button
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => copyToClipboard(platform.platform_password, `password_${platform.id}`)}
-                                  className="p-1 h-6 w-6"
+                                  className="p-2 h-8 w-8"
                                   title="비밀번호 복사"
                                 >
                                   {copiedItems[`password_${platform.id}`] ? (
-                                    <Check className="h-3 w-3 text-green-600" />
+                                    <Check className="h-4 w-4 text-green-600" />
                                   ) : (
-                                    <Copy className="h-3 w-3" />
+                                    <Copy className="h-4 w-4" />
                                   )}
                                 </Button>
-                              </>
-                            )}
+                              )}
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-gray-600 text-sm w-20">샵 아이디:</span>
+                            <div className="flex items-center gap-1 flex-1">
+                              <span className="font-mono bg-white px-3 py-2 rounded border flex-1">
+                                {platform.shop_id || '-'}
+                              </span>
+                              {platform.shop_id && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => copyToClipboard(platform.shop_id, `shop_id_${platform.id}`)}
+                                  className="p-2 h-8 w-8"
+                                  title="복사"
+                                >
+                                  {copiedItems[`shop_id_${platform.id}`] ? (
+                                    <Check className="h-4 w-4 text-green-600" />
+                                  ) : (
+                                    <Copy className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         </div>
                         
-                        <div className="flex justify-between pt-2 border-t">
+                        <div className="flex justify-between pt-2 border-t text-sm">
                           <span className="font-medium text-gray-600">등록일:</span>
                           <span className="text-gray-500">
                             {new Date(platform.created_at).toLocaleDateString('ko-KR')}
                           </span>
                         </div>
                         
-                        <div className="flex justify-between">
+                        <div className="flex justify-between text-sm">
                           <span className="font-medium text-gray-600">수정일:</span>
                           <span className="text-gray-500">
                             {new Date(platform.updated_at).toLocaleDateString('ko-KR')}
@@ -1766,7 +1752,7 @@ export default function ClientsPage() {
                         {/* 답변 지침 표시 */}
                         {platform.answer_guide && (
                           <div className="pt-2 border-t">
-                            <div className="space-y-1">
+                            <div className="space-y-2">
                               <span className="font-medium text-gray-600 text-sm">답변 지침:</span>
                               <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
                                 <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
