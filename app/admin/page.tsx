@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Search, Building2, Users, TrendingUp, Calendar, Eye, Edit, Trash2, Download, Info, EyeOff, Copy, Check, Plus, Shield, AlertTriangle, RefreshCw, FileSpreadsheet } from "lucide-react"
+import { Search, Building2, Users, TrendingUp, Calendar, Eye, Edit, Trash2, Download, Info, EyeOff, Copy, Check, Plus, Shield, AlertTriangle, RefreshCw, FileSpreadsheet, Upload } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { downloadClientsExcel, downloadAgenciesExcel } from "@/lib/excel-utils"
@@ -16,6 +16,7 @@ import { getClientPlatforms, getAgencies, getClients } from "@/lib/database"
 import { useAuth } from "@/components/auth/auth-context"
 import { useRouter } from "next/navigation"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import ExcelUpload from "@/components/excel-upload"
 
 // 플랫폼 정보 인터페이스
 interface ClientPlatform {
@@ -115,6 +116,10 @@ export default function AdminPage() {
     message: string
   }>({ type: null, message: '' })
   const [spreadsheetId, setSpreadsheetId] = useState('')
+  
+  // 엑셀 업로드 모달 상태
+  const [isExcelUploadModalOpen, setIsExcelUploadModalOpen] = useState(false)
+  const [selectedAgencyForUpload, setSelectedAgencyForUpload] = useState<number | null>(null)
 
   // 데이터 로딩 함수
   const loadData = async () => {
@@ -418,6 +423,27 @@ export default function AdminPage() {
     setSyncStatus({ type: null, message: '' })
     setSpreadsheetId('')
   }
+  
+  // 엑셀 업로드 핸들러
+  const handleExcelUpload = (data: any[]) => {
+    // 업로드 성공 후 데이터 새로고침
+    loadData()
+    setIsExcelUploadModalOpen(false)
+    alert(`${data.length}개의 광고주가 성공적으로 등록되었습니다.`)
+  }
+  
+  // 엑셀 업로드 모달 열기
+  const openExcelUploadModal = () => {
+    // 대행사 목록이 없으면 경고
+    if (agencies.length === 0) {
+      alert('먼저 대행사를 등록해주세요.')
+      return
+    }
+    
+    // 첫 번째 대행사를 기본값으로 설정
+    setSelectedAgencyForUpload(agencies[0].id)
+    setIsExcelUploadModalOpen(true)
+  }
 
   // 인증 로딩 중
   if (authLoading) {
@@ -652,10 +678,19 @@ export default function AdminPage() {
           <Card>
             <CardHeader className="flex items-center justify-between">
               <CardTitle>전체 광고주 목록 ({filteredClients.length}개)</CardTitle>
-              <Button variant="outline" onClick={handleDownloadClientsExcel}>
-                <Download className="h-4 w-4 mr-2" />
-                엑셀 다운로드
-              </Button>
+              <div className="flex gap-2">
+                <Button 
+                  onClick={openExcelUploadModal}
+                  className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  엑셀 업로드
+                </Button>
+                <Button variant="outline" onClick={handleDownloadClientsExcel}>
+                  <Download className="h-4 w-4 mr-2" />
+                  엑셀 다운로드
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <Table>
@@ -1235,6 +1270,52 @@ export default function AdminPage() {
                 )}
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 엑셀 업로드 모달 */}
+      <Dialog open={isExcelUploadModalOpen} onOpenChange={setIsExcelUploadModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold">
+              광고주 엑셀 업로드
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* 대행사 선택 */}
+            <div className="space-y-2">
+              <Label htmlFor="uploadAgencySelect" className="text-sm font-medium">
+                대행사 선택 *
+              </Label>
+              <Select 
+                value={selectedAgencyForUpload?.toString() || ""} 
+                onValueChange={(value) => setSelectedAgencyForUpload(Number(value))}
+              >
+                <SelectTrigger id="uploadAgencySelect">
+                  <SelectValue placeholder="대행사를 선택하세요" />
+                </SelectTrigger>
+                <SelectContent>
+                  {agencies.map((agency) => (
+                    <SelectItem key={agency.id} value={agency.id.toString()}>
+                      {agency.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-500">
+                업로드할 광고주들이 속할 대행사를 선택해주세요.
+              </p>
+            </div>
+
+            {/* 엑셀 업로드 컴포넌트 */}
+            {selectedAgencyForUpload && (
+              <ExcelUpload
+                agencyId={selectedAgencyForUpload}
+                onUpload={handleExcelUpload}
+              />
+            )}
           </div>
         </DialogContent>
       </Dialog>
