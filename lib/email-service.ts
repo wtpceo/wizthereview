@@ -7,8 +7,8 @@ const EMAIL_CONFIG = {
   port: 587,
   secure: false, // true for 465, false for other ports
   auth: {
-    user: process.env.EMAIL_USER || 'your-email@gmail.com', // Gmail 계정
-    pass: process.env.EMAIL_PASS || 'your-app-password'    // Gmail 앱 비밀번호
+    user: process.env.EMAIL_USER || 'ceo@wiztheplanning.com', // Gmail 계정
+    pass: process.env.EMAIL_PASS || 'NOT_CONFIGURED'    // Gmail 앱 비밀번호
   }
 }
 
@@ -31,6 +31,12 @@ export async function sendEmail(
   text?: string
 ) {
   try {
+    // 이메일 설정이 제대로 되어있는지 확인
+    if (EMAIL_CONFIG.auth.pass === 'NOT_CONFIGURED') {
+      console.log('⚠️ 이메일 설정이 완료되지 않아 이메일 전송을 건너뜁니다.')
+      return { success: true, skipped: true, message: '이메일 설정이 완료되지 않음' }
+    }
+
     const mailOptions = {
       from: `"리뷰프로그램 시스템" <${EMAIL_CONFIG.auth.user}>`,
       to: Array.isArray(to) ? to.join(', ') : to,
@@ -41,7 +47,8 @@ export async function sendEmail(
 
     console.log('📧 이메일 전송 시작...', {
       to: mailOptions.to,
-      subject: mailOptions.subject
+      subject: mailOptions.subject,
+      user: EMAIL_CONFIG.auth.user
     })
 
     const info = await transporter.sendMail(mailOptions)

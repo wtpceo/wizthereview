@@ -390,11 +390,19 @@ export async function syncNewClientToSheet(
     console.log(`🔄 새로운 클라이언트 실시간 동기화 시작: ${clientData.store_name}`)
     
     // 환경 변수에서 구글 시트 ID 가져오기 (실제 운영에서는 설정 필요)
-    const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID
+    // TODO: 실제 구글 시트 ID로 변경해주세요
+    const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID || 
+      'PUT_YOUR_ACTUAL_SPREADSHEET_ID_HERE' // ⚠️ 실제 구글 시트 ID로 변경 필요
     
-    if (!spreadsheetId) {
-      console.log('⚠️ 구글 시트 ID가 설정되지 않음 - 실시간 동기화 스킵')
-      return { success: true, message: '구글 시트 ID가 설정되지 않아 동기화를 건너뜁니다.' }
+    console.log('📊 사용할 스프레드시트 ID:', spreadsheetId.substring(0, 10) + '...')
+    
+    if (!spreadsheetId || spreadsheetId.includes('PUT_YOUR_') || spreadsheetId.includes('your_') || spreadsheetId.includes('임시')) {
+      console.warn('⚠️ 구글 시트 ID가 올바르게 설정되지 않음')
+      console.warn('⚠️ 현재 설정된 ID:', spreadsheetId)
+      console.warn('⚠️ 해결 방법:')
+      console.warn('   1. 환경 변수 GOOGLE_SHEETS_SPREADSHEET_ID 설정')
+      console.warn('   2. 또는 lib/google-sheets.ts 파일에서 실제 시트 ID로 변경')
+      return { success: false, message: '구글 시트 ID가 올바르게 설정되지 않았습니다. 콘솔 로그를 확인하세요.' }
     }
 
     if (!platforms || platforms.length === 0) {
