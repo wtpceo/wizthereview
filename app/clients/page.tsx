@@ -1891,7 +1891,7 @@ export default function ClientsPage() {
                   <strong>필수 사항:</strong>
                   <ul className="mt-2 ml-4 list-disc text-xs">
                     <li>구글 시트 제목: '리뷰프로그램'</li>
-                    <li>시트 탭: '네이버 플레이스', '배민', '쿠팡', '요기요'</li>
+                    <li>시트 탭: '네이버 플레이스', '배민', '쿠팡', '요기요', '땡겨요'</li>
                     <li>서비스 계정 편집 권한 필요</li>
                   </ul>
                 </AlertDescription>

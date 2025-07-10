@@ -133,6 +133,7 @@ export default function TestSheetsPage() {
                   <li>• 배달의민족 → '배민' 탭</li>
                   <li>• 쿠팡이츠 → '쿠팡' 탭</li>
                   <li>• 요기요 → '요기요' 탭</li>
+                  <li>• 땡겨요 → '땡겨요' 탭</li>
                 </ul>
               </div>
             )}
@@ -171,6 +172,7 @@ export default function TestSheetsPage() {
                 <li>• 배민</li>
                 <li>• 쿠팡</li>
                 <li>• 요기요</li>
+                <li>• 땡겨요</li>
               </ul>
             </div>
           </div>
