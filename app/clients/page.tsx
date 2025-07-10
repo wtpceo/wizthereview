@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Search, Edit, Trash2, Eye, Plus, X, Download, Filter, MoreHorizontal, Info, EyeOff, Copy, Check, Users, Upload, File, Paperclip } from "lucide-react"
+import { Search, Edit, Trash2, Eye, Plus, X, Download, Filter, MoreHorizontal, Info, EyeOff, Copy, Check, Users, Upload, File, Paperclip, RefreshCw } from "lucide-react"
 import { downloadClientsExcel, downloadClientsWithPlatformsExcel } from "@/lib/excel-utils"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { getClientPlatforms, getClients, createClient, updateClient, updateClientPlatforms, deleteClient, uploadClientFile, getClientFiles, getFileDownloadUrl, deleteClientFile, checkClientFileExists, checkFileSystemAvailable } from "@/lib/database"
@@ -73,6 +73,11 @@ export default function ClientsPage() {
   
   // 엑셀 업로드 모달 상태
   const [isExcelUploadModalOpen, setIsExcelUploadModalOpen] = useState(false)
+  
+  // 구글 시트 동기화 모달 상태
+  const [isGoogleSyncModalOpen, setIsGoogleSyncModalOpen] = useState(false)
+  const [googleSheetId, setGoogleSheetId] = useState("")
+  const [isSyncing, setIsSyncing] = useState(false)
   
   // 플랫폼 정보 모달 관련 상태
   const [isPlatformModalOpen, setIsPlatformModalOpen] = useState(false)
@@ -730,6 +735,43 @@ export default function ClientsPage() {
     alert(`${data.length}개의 광고주가 성공적으로 등록되었습니다.`)
   }
 
+  // 구글 시트 동기화 함수
+  const handleGoogleSync = async () => {
+    if (!googleSheetId.trim()) {
+      alert('구글 시트 ID를 입력해주세요.')
+      return
+    }
+
+    setIsSyncing(true)
+    try {
+      const response = await fetch('/api/sync-google-sheets', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          spreadsheetId: googleSheetId,
+          syncType: 'all'
+        }),
+      })
+
+      const result = await response.json()
+
+      if (response.ok) {
+        alert(`✅ 구글 시트 동기화 완료!\n\n${result.message || '성공적으로 동기화되었습니다.'}`)
+        setIsGoogleSyncModalOpen(false)
+        setGoogleSheetId("")
+      } else {
+        alert(`❌ 동기화 실패: ${result.error || '알 수 없는 오류'}`)
+      }
+    } catch (error: any) {
+      console.error('Google sync error:', error)
+      alert(`❌ 동기화 중 오류 발생: ${error.message || '네트워크 오류'}`)
+    } finally {
+      setIsSyncing(false)
+    }
+  }
+
   return (
     <div className="space-y-6 md:space-y-8">
       {/* 헤더 */}
@@ -739,6 +781,15 @@ export default function ClientsPage() {
           <p className="text-sm md:text-base text-gray-600 mt-1">광고주를 등록하고 관리하세요</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+          <Button
+            onClick={() => setIsGoogleSyncModalOpen(true)}
+            className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-sm"
+            size="sm"
+          >
+            <RefreshCw className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">구글 시트 동기화</span>
+            <span className="sm:hidden">동기화</span>
+          </Button>
           <Button
             onClick={() => setIsExcelUploadModalOpen(true)}
             className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-sm"
@@ -1816,6 +1867,80 @@ export default function ClientsPage() {
               agencyId={user?.agency_id || 0}
               onUpload={handleExcelUpload}
             />
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 구글 시트 동기화 모달 */}
+      <Dialog open={isGoogleSyncModalOpen} onOpenChange={setIsGoogleSyncModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold">
+              구글 시트 동기화
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <p className="text-sm text-gray-600">
+                광고주 데이터를 구글 시트와 동기화합니다.
+              </p>
+              <Alert className="bg-blue-50 border-blue-200">
+                <Info className="h-4 w-4 text-blue-600" />
+                <AlertDescription className="text-sm text-blue-800">
+                  <strong>필수 사항:</strong>
+                  <ul className="mt-2 ml-4 list-disc text-xs">
+                    <li>구글 시트 제목: '리뷰프로그램'</li>
+                    <li>시트 탭: '네이버 플레이스', '배민', '쿠팡', '요기요'</li>
+                    <li>서비스 계정 편집 권한 필요</li>
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="googleSheetId">구글 시트 ID</Label>
+              <Input
+                id="googleSheetId"
+                placeholder="1234567890abcdefghijk..."
+                value={googleSheetId}
+                onChange={(e) => setGoogleSheetId(e.target.value)}
+                className="font-mono text-sm"
+              />
+              <p className="text-xs text-gray-500">
+                구글 시트 URL의 /d/ 와 /edit 사이의 문자열
+              </p>
+            </div>
+
+            <div className="flex justify-end space-x-3 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsGoogleSyncModalOpen(false)
+                  setGoogleSheetId("")
+                }}
+                disabled={isSyncing}
+              >
+                취소
+              </Button>
+              <Button
+                onClick={handleGoogleSync}
+                disabled={isSyncing || !googleSheetId.trim()}
+                className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700"
+              >
+                {isSyncing ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    동기화 중...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    동기화 시작
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
