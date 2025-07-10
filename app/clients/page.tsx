@@ -20,6 +20,7 @@ import { useAuth } from "@/components/auth/auth-context"
 import { useRouter } from "next/navigation"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { FileType, FILE_TYPE_LABELS, ClientFile } from "@/lib/types"
+import ExcelUpload from "@/components/excel-upload"
 
 const PLATFORMS = ["네이버플레이스", "배달의민족", "쿠팡이츠", "요기요", "땡겨요", "배달이음", "카카오매장"]
 
@@ -70,7 +71,8 @@ export default function ClientsPage() {
   const [editingClient, setEditingClient] = useState<Client | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   
-
+  // 엑셀 업로드 모달 상태
+  const [isExcelUploadModalOpen, setIsExcelUploadModalOpen] = useState(false)
   
   // 플랫폼 정보 모달 관련 상태
   const [isPlatformModalOpen, setIsPlatformModalOpen] = useState(false)
@@ -720,6 +722,14 @@ export default function ClientsPage() {
     }
   }
 
+  // 엑셀 업로드 핸들러
+  const handleExcelUpload = (data: any[]) => {
+    // 업로드 성공 후 데이터 새로고침
+    loadClients()
+    setIsExcelUploadModalOpen(false)
+    alert(`${data.length}개의 광고주가 성공적으로 등록되었습니다.`)
+  }
+
   return (
     <div className="space-y-6 md:space-y-8">
       {/* 헤더 */}
@@ -729,6 +739,15 @@ export default function ClientsPage() {
           <p className="text-sm md:text-base text-gray-600 mt-1">광고주를 등록하고 관리하세요</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+          <Button
+            onClick={() => setIsExcelUploadModalOpen(true)}
+            className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-sm"
+            size="sm"
+          >
+            <Upload className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">엑셀 업로드</span>
+            <span className="sm:hidden">업로드</span>
+          </Button>
           <Button
             variant="outline"
             onClick={handleDownloadExcel}
@@ -1778,6 +1797,25 @@ export default function ClientsPage() {
             <Button variant="outline" onClick={() => setIsPlatformModalOpen(false)}>
               닫기
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 엑셀 업로드 모달 */}
+      <Dialog open={isExcelUploadModalOpen} onOpenChange={setIsExcelUploadModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold">
+              광고주 엑셀 업로드
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* 엑셀 업로드 컴포넌트 */}
+            <ExcelUpload
+              agencyId={user?.agency_id || 0}
+              onUpload={handleExcelUpload}
+            />
           </div>
         </DialogContent>
       </Dialog>
