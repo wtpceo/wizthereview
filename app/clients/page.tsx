@@ -751,7 +751,7 @@ export default function ClientsPage() {
         },
         body: JSON.stringify({
           spreadsheetId: googleSheetId,
-          syncType: 'all'
+          type: 'all'
         }),
       })
 
