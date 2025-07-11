@@ -12,12 +12,11 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Search, Edit, Trash2, Eye, Plus, X, Download, Filter, MoreHorizontal, Info, EyeOff, Copy, Check, Users, Upload, File, Paperclip, RefreshCw } from "lucide-react"
+import { Search, Edit, Trash2, Eye, Plus, X, Download, Filter, MoreHorizontal, Info, Copy, Check, Users, Upload, File, Paperclip, RefreshCw } from "lucide-react"
 import { downloadClientsExcel, downloadClientsWithPlatformsExcel } from "@/lib/excel-utils"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { getClientPlatforms, getClients, createClient, updateClient, updateClientPlatforms, deleteClient, uploadClientFile, getClientFiles, getFileDownloadUrl, deleteClientFile, checkClientFileExists, checkFileSystemAvailable } from "@/lib/database"
+import { getClientPlatforms, getClients, createClient, updateClient, updateClientPlatforms, deleteClient, uploadClientFile, getClientFiles, getFileDownloadUrl, deleteClientFile, checkFileSystemAvailable } from "@/lib/database"
 import { useAuth } from "@/components/auth/auth-context"
-import { useRouter } from "next/navigation"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { FileType, FILE_TYPE_LABELS, ClientFile } from "@/lib/types"
 import ExcelUpload from "@/components/excel-upload"
@@ -60,13 +59,16 @@ interface Client {
 }
 
 export default function ClientsPage() {
+  console.log("ClientsPage 컴포넌트 렌더링 시작")
+  
   const { user, refreshUser } = useAuth()
-  const router = useRouter()
+  
+  console.log("현재 user 상태:", user)
   
   const [clients, setClients] = useState<Client[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedAgency, setSelectedAgency] = useState("전체")
-  const [filteredClients, setFilteredClients] = useState(clients)
+  const [filteredClients, setFilteredClients] = useState<Client[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingClient, setEditingClient] = useState<Client | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -111,8 +113,6 @@ export default function ClientsPage() {
   const [clientFiles, setClientFiles] = useState<ClientFile[]>([])
   const [isLoadingFiles, setIsLoadingFiles] = useState(false)
   const [fileSystemAvailable, setFileSystemAvailable] = useState(true)
-
-
 
   // 컴포넌트 마운트 시 클라이언트 목록 로드
   const loadClients = async () => {
@@ -569,7 +569,7 @@ export default function ClientsPage() {
         // 수정 모드
         console.log('📝 광고주 정보 수정 중...', editingClient.id)
         
-        const { data, error } = await updateClient(editingClient.id, {
+        const { error } = await updateClient(editingClient.id, {
           store_name: formData.storeName,
           business_number: formData.businessNumber,
           owner_phone: formData.ownerPhone,
@@ -709,8 +709,6 @@ export default function ClientsPage() {
       setIsLoadingPlatforms(false)
     }
   }
-
-
 
   // 클립보드 복사 함수
   const copyToClipboard = async (text: string, itemKey: string) => {
@@ -1117,7 +1115,7 @@ export default function ClientsPage() {
                       </div>
                     )}
 
-                    {fileSystemAvailable && (
+                    {fileSystemAvailable && !isLoadingFiles && (
                       <>
                         <div className="grid gap-4 md:grid-cols-3">
                           {/* 신분증 */}
@@ -1479,7 +1477,7 @@ export default function ClientsPage() {
             <Table>
               <TableHeader className="bg-gray-50">
                 <TableRow>
-                                  <TableHead className="font-semibold">매장명</TableHead>
+                  <TableHead className="font-semibold">매장명</TableHead>
                 <TableHead className="font-semibold">사업자번호</TableHead>
                 <TableHead className="font-semibold">연락처</TableHead>
                 <TableHead className="font-semibold">플랫폼</TableHead>

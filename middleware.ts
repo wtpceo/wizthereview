@@ -9,15 +9,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
   
-  // /clients 경로는 인증된 사용자만 접근 가능
-  if (pathname.startsWith('/clients')) {
-    const session = request.cookies.get('session');
-    
-    if (!session) {
-      return NextResponse.redirect(new URL('/login', request.url));
-    }
-  }
-  
+  // 현재는 모든 요청을 통과시킴 (인증은 클라이언트 사이드에서 처리)
   return NextResponse.next();
 }
 
