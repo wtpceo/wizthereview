@@ -13,10 +13,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [initialized, setInitialized] = useState(false)
   const [authChecked, setAuthChecked] = useState(false)
+  
+  // 인증이 필요 없는 페이지 목록
+  const authExcludedPaths = ['/register-client']
 
   // 현재 사용자 프로필 가져오기
   const fetchUserProfile = async (skipLoading = false, retryCount = 0) => {
     console.log('👤 사용자 프로필 조회 시작... (시도:', retryCount + 1, ')')
+    
+    // 현재 경로 확인
+    const currentPath = typeof window !== 'undefined' ? window.location.pathname : ''
+    if (authExcludedPaths.includes(currentPath)) {
+      console.log('🚫 인증 체크 건너뛰기 - 제외된 경로:', currentPath)
+      setUser(null)
+      setLoading(false)
+      setInitialized(true)
+      setAuthChecked(true)
+      return
+    }
     
     if (!skipLoading && !authChecked) {
       setLoading(true)
@@ -420,6 +434,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     
     const initAuth = async () => {
       try {
+        // 현재 경로 확인
+        const currentPath = typeof window !== 'undefined' ? window.location.pathname : ''
+        if (authExcludedPaths.includes(currentPath)) {
+          console.log('🚫 인증 초기화 건너뛰기 - 제외된 경로:', currentPath)
+          if (mounted) {
+            setLoading(false)
+            setInitialized(true)
+            setAuthChecked(true)
+          }
+          return
+        }
+        
         // 환경 변수 확인
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
         if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co') {
