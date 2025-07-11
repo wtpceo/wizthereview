@@ -30,8 +30,7 @@ const PLATFORM_SHEET_MAPPING = {
   '네이버플레이스': '네이버 플레이스',
   '배달의민족': '배민',
   '쿠팡이츠': '쿠팡',
-  '요기요': '요기요',
-  '땡겨요': '땡겨요'
+  '요기요': '요기요'
 }
 
 // 구글 시트 ID는 함수 파라미터로 받아서 사용
@@ -393,7 +392,7 @@ export async function syncNewClientToSheet(
     // 환경 변수에서 구글 시트 ID 가져오기 (실제 운영에서는 설정 필요)
     // TODO: 실제 구글 시트 ID로 변경해주세요
     const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID || 
-      'PUT_YOUR_ACTUAL_SPREADSHEET_ID_HERE' // ⚠️ 실제 구글 시트 ID로 변경 필요
+      '1QRNRaKjMaTgAcpSyjz-IeckdtcX2oNDxx13fe4vI5YM' // ⚠️ 실제 구글 시트 ID로 변경 필요
     
     console.log('📊 사용할 스프레드시트 ID:', spreadsheetId.substring(0, 10) + '...')
     
