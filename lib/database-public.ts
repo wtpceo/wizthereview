@@ -203,8 +203,62 @@ export async function createClientPublic(client: {
     
     console.log('🎉 영업사원 광고주 등록 완료!')
     
-    // 구글 시트 동기화는 임시 비활성화
-    console.log('⚠️ 구글 시트 동기화 임시 비활성화됨')
+    // 실시간 구글 시트 동기화
+    try {
+      console.log('🔄 영업사원 등록 - 실시간 구글 시트 동기화 시작...')
+      console.log('📋 클라이언트 정보:', {
+        id: clientData.id,
+        store_name: clientData.store_name,
+        platforms_count: client.platforms?.length || 0
+      })
+      
+      // 플랫폼 정보가 있는 경우에만 동기화
+      if (client.platforms && client.platforms.length > 0) {
+        const validPlatforms = client.platforms.filter(platform => 
+          platform.platform_name && platform.platform_name.trim() !== ''
+        )
+        
+        console.log('🔍 유효한 플랫폼 정보:', validPlatforms.map(p => ({
+          name: p.platform_name,
+          hasId: !!p.platform_id,
+          hasPassword: !!p.platform_password
+        })))
+        
+        if (validPlatforms.length > 0) {
+          console.log('📤 구글 시트 동기화 함수 호출 중...')
+          
+          const syncResult = await syncNewClientToSheet(
+            {
+              id: clientData.id,
+              store_name: clientData.store_name,
+              created_at: clientData.created_at
+            },
+            validPlatforms
+          )
+          
+          console.log('📨 동기화 결과:', syncResult)
+          
+          if (syncResult.success) {
+            console.log('✅ 영업사원 등록 - 실시간 구글 시트 동기화 완료:', syncResult.message)
+          } else {
+            console.error('❌ 영업사원 등록 - 실시간 구글 시트 동기화 실패:', syncResult.error)
+            console.error('❌ 동기화 실패 상세:', syncResult)
+            // 동기화 실패는 치명적이지 않으므로 경고만 표시
+          }
+        } else {
+          console.log('ℹ️ 동기화할 유효한 플랫폼 정보 없음')
+        }
+      } else {
+        console.log('ℹ️ 플랫폼 정보 없음 - 동기화 건너뛰기')
+      }
+    } catch (syncError: any) {
+      console.error('💥 영업사원 등록 - 실시간 동기화 중 예외 발생:', {
+        message: syncError.message,
+        stack: syncError.stack,
+        full: syncError
+      })
+      // 동기화 실패해도 등록은 성공으로 처리
+    }
     
     return { 
       data: clientData, 

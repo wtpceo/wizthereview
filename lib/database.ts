@@ -1,6 +1,7 @@
 import { supabase, supabaseAdmin } from './supabase'
 import { FileType, ClientFile, FileUploadRequest, FileUploadResponse } from './types'
 import { syncNewClientToSheet } from './google-sheets'
+import { sendNewClientNotification } from './email-service-resend'
 
 // 대행사 관련 함수들
 export async function getAgencies() {
@@ -368,6 +369,26 @@ export async function createClient(client: {
       store_name: clientData.store_name
     })
 
+    // 간단한 이메일 알림 발송 (Resend 사용)
+    try {
+      console.log('📧 광고주 등록 알림 이메일 발송 중...')
+      
+      const emailResult = await sendNewClientNotification({
+        store_name: client.store_name,
+        business_number: client.business_number,
+        owner_phone: client.owner_phone
+      })
+      
+      if (emailResult.success) {
+        console.log('✅ 알림 이메일 발송 성공')
+      } else {
+        console.log('⚠️ 이메일 발송 실패:', emailResult.error)
+      }
+    } catch (emailError) {
+      console.error('❌ 알림 이메일 발송 실패:', emailError)
+      // 이메일 발송 실패는 광고주 등록을 막지 않음
+    }
+
     // 3단계: 플랫폼 정보 저장 (있는 경우)
     if (client.platforms && client.platforms.length > 0) {
       console.log('🔧 3단계: 플랫폼 정보 저장...', client.platforms.length + '개')
@@ -409,20 +430,15 @@ export async function createClient(client: {
 
     console.log('🎉 광고주 등록 완료!')
     
-    // 실시간 구글 시트 동기화 (임시 비활성화)
+    // 실시간 구글 시트 동기화
     try {
-      console.log('⚠️ 실시간 구글 시트 동기화 임시 비활성화됨')
+      console.log('🔄 실시간 구글 시트 동기화 시작...')
       console.log('📋 클라이언트 정보:', {
         id: clientData.id,
         store_name: clientData.store_name,
         platforms_count: client.platforms?.length || 0
       })
       
-      console.log('ℹ️ 관리자 페이지에서 수동 동기화를 사용해주세요')
-      console.log('🔧 문제 해결 후 자동 동기화가 복구됩니다')
-      
-      // TODO: OpenSSL 호환성 문제 해결 후 주석 해제
-      /*
       // 플랫폼 정보가 있는 경우에만 동기화
       if (client.platforms && client.platforms.length > 0) {
         const validPlatforms = client.platforms.filter(platform => 
@@ -462,7 +478,6 @@ export async function createClient(client: {
       } else {
         console.log('ℹ️ 플랫폼 정보 없음 - 동기화 건너뛰기')
       }
-      */
     } catch (syncError: any) {
       console.error('💥 실시간 동기화 중 예외 발생:', {
         message: syncError.message,
