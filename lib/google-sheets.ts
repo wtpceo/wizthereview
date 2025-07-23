@@ -94,6 +94,10 @@ export async function addPlatformDataToSheet(
     platformPassword: string
     shopId: string
     registeredAt?: string
+    ownerPhone?: string
+    contractPeriod?: string
+    guide?: string
+    memo?: string
   },
   sendNotification: boolean = true
 ) {
@@ -132,12 +136,16 @@ export async function addPlatformDataToSheet(
       data.platformId,
       data.platformPassword,
       data.shopId,
-      data.registeredAt || new Date().toISOString().split('T')[0]
+      data.registeredAt || new Date().toISOString().split('T')[0],
+      data.ownerPhone || '',
+      data.contractPeriod || '',
+      data.guide || '',
+      data.memo || ''
     ]
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: spreadsheetId,
-      range: `${sheetName}!A:E`,
+      range: `${sheetName}!A:I`,
       valueInputOption: 'USER_ENTERED',
       requestBody: {
         values: [row]
@@ -198,18 +206,18 @@ async function ensureSheetHeaders(spreadsheetId: string, sheetName: string) {
     // 첫 번째 행 데이터 확인
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: spreadsheetId,
-      range: `${sheetName}!A1:E1`
+      range: `${sheetName}!A1:I1`
     })
 
     const headers = response.data.values?.[0]
     
     // 헤더가 없거나 완전하지 않은 경우 추가
-    if (!headers || headers.length < 5) {
-      const headerRow = ['업체명', '아이디', '비밀번호', '샵아이디', '등록일']
+    if (!headers || headers.length < 9) {
+      const headerRow = ['업체명', '아이디', '비밀번호', '샵아이디', '등록일', '전화번호', '계약기간', '지침', '메모']
       
       await sheets.spreadsheets.values.update({
         spreadsheetId: spreadsheetId,
-        range: `${sheetName}!A1:E1`,
+        range: `${sheetName}!A1:I1`,
         valueInputOption: 'USER_ENTERED',
         requestBody: {
           values: [headerRow]
@@ -267,7 +275,11 @@ export async function syncAllPlatformsToSheet(spreadsheetId: string) {
           platformId: platform.platform_id,
           platformPassword: platform.platform_password,
           shopId: platform.shop_id,
-          registeredAt: client.created_at ? client.created_at.split('T')[0] : undefined
+          registeredAt: client.created_at ? client.created_at.split('T')[0] : undefined,
+          ownerPhone: client.owner_phone,
+          contractPeriod: client.contract_period,
+          guide: client.guide,
+          memo: client.memo
         }, false) // 이메일 알림 비활성화
 
         if (result.success) {
@@ -351,7 +363,11 @@ export async function addClientPlatformsToSheet(spreadsheetId: string, clientId:
         platformId: platform.platform_id,
         platformPassword: platform.platform_password,
         shopId: platform.shop_id,
-        registeredAt: client.created_at ? client.created_at.split('T')[0] : undefined
+        registeredAt: client.created_at ? client.created_at.split('T')[0] : undefined,
+        ownerPhone: client.owner_phone,
+        contractPeriod: client.contract_period,
+        guide: client.guide,
+        memo: client.memo
       }, true) // 개별 클라이언트 동기화 시에는 이메일 알림 활성화
 
       if (result.success) {
@@ -386,6 +402,10 @@ export async function syncNewClientToSheet(
     id: number
     store_name: string
     created_at: string
+    owner_phone?: string
+    contract_period?: string
+    guide?: string
+    memo?: string
   },
   platforms: Array<{
     platform_name: string
@@ -430,7 +450,11 @@ export async function syncNewClientToSheet(
         platformId: platform.platform_id,
         platformPassword: platform.platform_password,
         shopId: platform.shop_id,
-        registeredAt: clientData.created_at ? clientData.created_at.split('T')[0] : undefined
+        registeredAt: clientData.created_at ? clientData.created_at.split('T')[0] : undefined,
+        ownerPhone: clientData.owner_phone,
+        contractPeriod: clientData.contract_period,
+        guide: clientData.guide,
+        memo: clientData.memo
       }, true) // 실시간 동기화 시에는 이메일 알림 활성화
 
       if (result.success) {
