@@ -54,6 +54,9 @@ export interface Client {
   guide?: string;
   service?: string;
   contract_months: number;
+  contract_start_date?: string;
+  contract_period?: number;
+  contract_end_date?: string;
   created_at: string;
   updated_at: string;
 }

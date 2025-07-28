@@ -56,6 +56,9 @@ interface Client {
   guide?: string
   service?: string
   contractMonths: number
+  contractStartDate?: string
+  contractPeriod?: number | null
+  contractEndDate?: string
 }
 
 export default function ClientsPage() {
@@ -72,6 +75,10 @@ export default function ClientsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingClient, setEditingClient] = useState<Client | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  
+  // 필터 상태 추가
+  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'expired' | 'expiring'>('all')
+  const [filterPlatform, setFilterPlatform] = useState<string>('all')
   
   // 엑셀 업로드 모달 상태
   const [isExcelUploadModalOpen, setIsExcelUploadModalOpen] = useState(false)
@@ -147,6 +154,11 @@ export default function ClientsPage() {
       loadClients()
     }
   }, [user])
+  
+  // 필터가 변경될 때마다 자동으로 검색
+  useEffect(() => {
+    handleSearch()
+  }, [clients, searchTerm, selectedAgency, filterStatus, filterPlatform])
 
   // 페이지 visibility 변화 감지 (다른 탭에서 돌아올 때)
   useEffect(() => {
@@ -182,6 +194,38 @@ export default function ClientsPage() {
 
     if (selectedAgency !== "전체") {
       filtered = filtered.filter((client) => client.agency === selectedAgency)
+    }
+    
+    // 계약 상태 필터
+    if (filterStatus !== 'all') {
+      const today = new Date()
+      const thirtyDaysFromNow = new Date()
+      thirtyDaysFromNow.setDate(today.getDate() + 30)
+      
+      filtered = filtered.filter((client) => {
+        if (!client.contractEndDate) return filterStatus === 'active'
+        
+        const endDate = new Date(client.contractEndDate)
+        
+        switch (filterStatus) {
+          case 'active':
+            return endDate >= today
+          case 'expired':
+            return endDate < today
+          case 'expiring':
+            return endDate >= today && endDate <= thirtyDaysFromNow
+          default:
+            return true
+        }
+      })
+    }
+    
+    // 플랫폼 필터
+    if (filterPlatform !== 'all') {
+      filtered = filtered.filter((client) => {
+        // 클라이언트의 플랫폼 정보가 있고, 선택한 플랫폼을 포함하는지 확인
+        return client.platforms?.some(p => p.platform_name === filterPlatform)
+      })
     }
 
     setFilteredClients(filtered)
@@ -1422,37 +1466,75 @@ export default function ClientsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <Input
-                placeholder="매장명, 사업자번호, 전화번호로 검색..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 focus:ring-2 focus:ring-blue-500 text-sm"
-              />
+          <div className="space-y-4">
+            {/* 검색 바 */}
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  placeholder="매장명, 사업자번호, 전화번호로 검색..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 focus:ring-2 focus:ring-blue-500 text-sm"
+                />
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-2">
+                <Select value={selectedAgency} onValueChange={setSelectedAgency}>
+                  <SelectTrigger className="w-full sm:w-40 md:w-48 focus:ring-2 focus:ring-blue-500 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {["전체", "ABC 광고대행사", "XYZ 마케팅", "123 디지털"].map((agency) => (
+                      <SelectItem key={agency} value={agency}>
+                        {agency}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button 
+                  onClick={handleSearch} 
+                  className="bg-blue-600 hover:bg-blue-700 text-sm"
+                  size="sm"
+                >
+                  <Search className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">검색</span>
+                </Button>
+              </div>
             </div>
-            <div className="flex flex-col sm:flex-row gap-3 sm:gap-2">
-              <Select value={selectedAgency} onValueChange={setSelectedAgency}>
-                <SelectTrigger className="w-full sm:w-40 md:w-48 focus:ring-2 focus:ring-blue-500 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {["전체", "ABC 광고대행사", "XYZ 마케팅", "123 디지털"].map((agency) => (
-                    <SelectItem key={agency} value={agency}>
-                      {agency}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button 
-                onClick={handleSearch} 
-                className="bg-blue-600 hover:bg-blue-700 text-sm"
-                size="sm"
-              >
-                <Search className="h-4 w-4 sm:mr-2" />
-                <span className="hidden sm:inline">검색</span>
-              </Button>
+            
+            {/* 필터 옵션 */}
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-3 border-t">
+              <div className="flex-1">
+                <Label className="text-sm font-medium mb-1 block">계약 상태</Label>
+                <Select value={filterStatus} onValueChange={(value: any) => setFilterStatus(value)}>
+                  <SelectTrigger className="w-full focus:ring-2 focus:ring-blue-500 text-sm">
+                    <SelectValue placeholder="전체" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">전체</SelectItem>
+                    <SelectItem value="active">계약 유효</SelectItem>
+                    <SelectItem value="expiring">만료 예정 (30일 이내)</SelectItem>
+                    <SelectItem value="expired">계약 만료</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="flex-1">
+                <Label className="text-sm font-medium mb-1 block">플랫폼</Label>
+                <Select value={filterPlatform} onValueChange={setFilterPlatform}>
+                  <SelectTrigger className="w-full focus:ring-2 focus:ring-blue-500 text-sm">
+                    <SelectValue placeholder="전체" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">전체</SelectItem>
+                    {PLATFORMS.map((platform) => (
+                      <SelectItem key={platform} value={platform}>
+                        {platform}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
         </CardContent>
@@ -1486,7 +1568,8 @@ export default function ClientsPage() {
                 <TableHead className="font-semibold">서비스</TableHead>
                 <TableHead className="font-semibold">메모</TableHead>
                 <TableHead className="font-semibold">파일</TableHead>
-                <TableHead className="font-semibold">계약개월수</TableHead>
+                <TableHead className="font-semibold">계약기간</TableHead>
+                <TableHead className="font-semibold">계약종료일</TableHead>
                 <TableHead className="font-semibold">등록일</TableHead>
                 <TableHead className="font-semibold">관리</TableHead>
                 </TableRow>
@@ -1555,6 +1638,9 @@ export default function ClientsPage() {
                       <Badge variant="secondary" className="bg-green-100 text-green-800">
                         {client.contractMonths}개월
                       </Badge>
+                    </TableCell>
+                    <TableCell className="text-gray-600 text-center">
+                      {client.contractEndDate ? new Date(client.contractEndDate).toLocaleDateString('ko-KR') : '-'}
                     </TableCell>
                     <TableCell className="text-gray-600">{client.registeredAt}</TableCell>
                     <TableCell>
@@ -1671,6 +1757,11 @@ export default function ClientsPage() {
                     <Badge variant="secondary" className="bg-green-100 text-green-800 text-xs">
                       {client.contractMonths}개월
                     </Badge>
+                    {client.contractEndDate && (
+                      <Badge variant="outline" className="text-xs text-orange-600">
+                        ~{new Date(client.contractEndDate).toLocaleDateString('ko-KR')}
+                      </Badge>
+                    )}
                     <Button
                       variant="outline"
                       size="sm"

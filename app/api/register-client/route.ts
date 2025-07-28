@@ -62,6 +62,9 @@ export async function POST(request: NextRequest) {
       guide: body.guide || '',
       service: body.service || '',
       contract_months: contractMonths,
+      contract_start_date: body.contract_start_date || null,
+      contract_period: contractMonths,
+      contract_end_date: body.contract_end_date || null,
       platforms: platforms.filter((p: any) => p.platform_name), // 플랫폼명이 있는 것만 필터링
     };
 

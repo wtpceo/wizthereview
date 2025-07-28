@@ -257,7 +257,10 @@ export async function getClients(agencyId?: number) {
       memo: client.memo || '',
       guide: client.guide || '',
       service: client.service || '',
-      contractMonths: client.contract_months || 12
+      contractMonths: client.contract_months || 12,
+      contractStartDate: client.contract_start_date || '',
+      contractPeriod: client.contract_period || null,
+      contractEndDate: client.contract_end_date || ''
     }))
 
     return { data: transformedData, error: null }
@@ -282,6 +285,9 @@ export async function createClient(client: {
   guide?: string
   service?: string
   contract_months?: number
+  contract_start_date?: string | null
+  contract_period?: number | null
+  contract_end_date?: string | null
   platforms?: Array<{
     platform_name: string
     platform_id: string
@@ -329,7 +335,10 @@ export async function createClient(client: {
         memo: client.memo,
         guide: client.guide,
         service: client.service,
-        contract_months: client.contract_months || 12
+        contract_months: client.contract_months || 12,
+        contract_start_date: client.contract_start_date,
+        contract_period: client.contract_period,
+        contract_end_date: client.contract_end_date
       }])
       .select()
       .single()
@@ -512,6 +521,9 @@ export async function updateClient(
     guide?: string
     service?: string
     contract_months?: number
+    contract_start_date?: string | null
+    contract_period?: number | null
+    contract_end_date?: string | null
   }
 ) {
   try {

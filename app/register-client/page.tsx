@@ -43,6 +43,8 @@ export default function RegisterClientPage() {
     business_number: '',
     owner_phone: '',
     contract_months: '12',
+    contract_start_date: new Date().toISOString().split('T')[0], // 오늘 날짜를 기본값으로
+    contract_end_date: '', // 자동 계산됨
     memo: '',
     guide: '',
     service: '',
@@ -50,9 +52,29 @@ export default function RegisterClientPage() {
   const [platforms, setPlatforms] = useState<PlatformInfo[]>([]);
   const [files, setFiles] = useState<FileInfo[]>([]);
 
+  // 계약 종료일 자동 계산 함수
+  const calculateEndDate = (startDate: string, months: string) => {
+    if (!startDate || !months) return '';
+    const start = new Date(startDate);
+    const monthsNum = parseInt(months);
+    start.setMonth(start.getMonth() + monthsNum);
+    return start.toISOString().split('T')[0];
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData(prev => {
+      const newData = { ...prev, [name]: value };
+      
+      // 시작일이나 계약 기간이 변경되면 종료일 자동 계산
+      if (name === 'contract_start_date' || name === 'contract_months') {
+        const startDate = name === 'contract_start_date' ? value : prev.contract_start_date;
+        const months = name === 'contract_months' ? value : prev.contract_months;
+        newData.contract_end_date = calculateEndDate(startDate, months);
+      }
+      
+      return newData;
+    });
   };
 
   const handleAddPlatform = () => {
@@ -159,6 +181,8 @@ export default function RegisterClientPage() {
           business_number: '',
           owner_phone: '',
           contract_months: '12',
+          contract_start_date: new Date().toISOString().split('T')[0],
+          contract_end_date: '',
           memo: '',
           guide: '',
           service: '',
@@ -292,18 +316,45 @@ export default function RegisterClientPage() {
                     />
                   </div>
                   
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="contract_start_date" className="text-base font-medium">계약 시작일 *</Label>
+                      <Input
+                        id="contract_start_date"
+                        name="contract_start_date"
+                        type="date"
+                        value={formData.contract_start_date}
+                        onChange={handleInputChange}
+                        required
+                        className="h-12 text-base"
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="contract_months" className="text-base font-medium">계약 개월수 *</Label>
+                      <Input
+                        id="contract_months"
+                        name="contract_months"
+                        type="number"
+                        min="1"
+                        max="120"
+                        value={formData.contract_months}
+                        onChange={handleInputChange}
+                        required
+                        className="h-12 text-base"
+                      />
+                    </div>
+                  </div>
+                  
                   <div className="space-y-2">
-                    <Label htmlFor="contract_months" className="text-base font-medium">계약 개월수 *</Label>
+                    <Label htmlFor="contract_end_date" className="text-base font-medium">계약 종료일 (자동 계산)</Label>
                     <Input
-                      id="contract_months"
-                      name="contract_months"
-                      type="number"
-                      min="1"
-                      max="120"
-                      value={formData.contract_months}
-                      onChange={handleInputChange}
-                      required
-                      className="h-12 text-base"
+                      id="contract_end_date"
+                      name="contract_end_date"
+                      type="date"
+                      value={formData.contract_end_date}
+                      readOnly
+                      className="h-12 text-base bg-gray-50"
                     />
                   </div>
 

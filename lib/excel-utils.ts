@@ -11,6 +11,8 @@ export interface ExcelClient {
   지침?: string
   서비스?: string
   계약개월수: number
+  계약시작일?: string
+  계약종료일?: string
 }
 
 export interface ExcelAgency {
@@ -49,6 +51,8 @@ export const downloadClientsWithPlatformsExcel = async (
       지침: client.guide || "",
       서비스: client.service || "",
       계약개월수: client.contractMonths || 12,
+      계약시작일: client.contractStartDate ? new Date(client.contractStartDate).toLocaleDateString('ko-KR') : "",
+      계약종료일: client.contractEndDate ? new Date(client.contractEndDate).toLocaleDateString('ko-KR') : "",
     }))
 
     const basicWorksheet = XLSX.utils.json_to_sheet(basicData)
@@ -63,6 +67,8 @@ export const downloadClientsWithPlatformsExcel = async (
       { wch: 25 }, // 지침
       { wch: 25 }, // 서비스
       { wch: 12 }, // 계약개월수
+      { wch: 12 }, // 계약시작일
+      { wch: 12 }, // 계약종료일
     ]
     basicWorksheet["!cols"] = basicColWidths
     XLSX.utils.book_append_sheet(workbook, basicWorksheet, "1. 광고주 기본정보")
@@ -335,6 +341,8 @@ export const downloadClientsExcel = (clients: any[], filename = "광고주_목�
     지침: client.guide || "",
     서비스: client.service || "",
     계약개월수: client.contractMonths || 12,
+    계약시작일: client.contractStartDate ? new Date(client.contractStartDate).toLocaleDateString('ko-KR') : "",
+    계약종료일: client.contractEndDate ? new Date(client.contractEndDate).toLocaleDateString('ko-KR') : "",
   }))
 
   const worksheet = XLSX.utils.json_to_sheet(excelData)
@@ -353,6 +361,8 @@ export const downloadClientsExcel = (clients: any[], filename = "광고주_목�
     { wch: 25 }, // 지침
     { wch: 25 }, // 서비스
     { wch: 12 }, // 계약개월수
+    { wch: 12 }, // 계약시작일
+    { wch: 12 }, // 계약종료일
   ]
   worksheet["!cols"] = colWidths
 
