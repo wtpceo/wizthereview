@@ -3,34 +3,40 @@ import { supabase } from './supabase'
 import { sendSyncNotification, sendBatchSyncNotification } from './email-service'
 
 // 환경 변수에서 Google Service Account 자격증명 가져오기
-let credentials: any;
+let credentials: any = null;
+let auth: any = null;
+let sheets: any = null;
 
-try {
-  const serviceAccountKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-  
-  if (!serviceAccountKey) {
-    throw new Error('GOOGLE_SERVICE_ACCOUNT_KEY 환경 변수가 설정되지 않았습니다.');
+// 환경 변수가 설정된 경우에만 Google Sheets 클라이언트 초기화
+const serviceAccountKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+
+if (serviceAccountKey) {
+  try {
+    // JSON 문자열을 파싱하고 이스케이프된 개행 문자를 실제 개행 문자로 변환
+    credentials = JSON.parse(serviceAccountKey);
+    
+    // private_key의 이스케이프된 개행 문자를 실제 개행 문자로 변환
+    if (credentials.private_key) {
+      credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
+    }
+    
+    // Google Sheets API 클라이언트 설정
+    auth = new google.auth.GoogleAuth({
+      credentials,
+      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    });
+    
+    sheets = google.sheets({ version: 'v4', auth });
+    console.log('✅ Google Sheets API 클라이언트 초기화 성공');
+  } catch (error) {
+    console.error('❌ Google Service Account 자격증명 파싱 실패:', error);
+    // 환경 변수가 잘못된 경우에도 앱이 시작될 수 있도록 에러를 throw하지 않음
   }
-  
-  // JSON 문자열을 파싱하고 이스케이프된 개행 문자를 실제 개행 문자로 변환
-  credentials = JSON.parse(serviceAccountKey);
-  
-  // private_key의 이스케이프된 개행 문자를 실제 개행 문자로 변환
-  if (credentials.private_key) {
-    credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
-  }
-} catch (error) {
-  console.error('❌ Google Service Account 자격증명 파싱 실패:', error);
-  throw new Error('Google Service Account 자격증명을 올바르게 설정해주세요.');
+} else {
+  console.warn('⚠️ GOOGLE_SERVICE_ACCOUNT_KEY 환경 변수가 설정되지 않았습니다. Google Sheets 동기화 기능을 사용할 수 없습니다.');
 }
 
-// Google Sheets API 클라이언트 설정
-const auth = new google.auth.GoogleAuth({
-  credentials,
-  scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-})
-
-export const sheets = google.sheets({ version: 'v4', auth })
+export { sheets }
 
 // 플랫폼별 시트 이름 매핑
 const PLATFORM_SHEET_MAPPING = {
@@ -52,6 +58,11 @@ async function checkDuplicateInSheet(
   storeName: string,
   platformId: string
 ): Promise<boolean> {
+  if (!sheets) {
+    console.warn('⚠️ Google Sheets API가 초기화되지 않았습니다.')
+    return false
+  }
+  
   try {
     console.log(`🔍 ${sheetName} 시트에서 중복 체크 중...`, { storeName, platformId })
     
@@ -105,6 +116,11 @@ export async function addPlatformDataToSheet(
   },
   sendNotification: boolean = true
 ) {
+  if (!sheets) {
+    console.warn('⚠️ Google Sheets API가 초기화되지 않았습니다.')
+    return { success: false, error: 'Google Sheets API가 초기화되지 않았습니다.' }
+  }
+  
   try {
     const sheetName = PLATFORM_SHEET_MAPPING[platformName as keyof typeof PLATFORM_SHEET_MAPPING]
     
@@ -221,6 +237,11 @@ export async function addPlatformDataToSheet(
 
 // 시트 헤더 확인 및 생성 함수
 async function ensureSheetHeaders(spreadsheetId: string, sheetName: string) {
+  if (!sheets) {
+    console.warn('⚠️ Google Sheets API가 초기화되지 않았습니다.')
+    return
+  }
+  
   try {
     console.log(`🔍 ${sheetName} 시트 헤더 확인 중...`)
     
@@ -260,6 +281,11 @@ async function ensureSheetHeaders(spreadsheetId: string, sheetName: string) {
 
 // 모든 플랫폼 데이터를 구글 시트에 동기화하는 함수
 export async function syncAllPlatformsToSheet(spreadsheetId: string) {
+  if (!sheets) {
+    console.warn('⚠️ Google Sheets API가 초기화되지 않았습니다.')
+    return { success: false, error: 'Google Sheets API가 초기화되지 않았습니다.' }
+  }
+  
   const startTime = Date.now()
   
   try {
@@ -363,6 +389,11 @@ export async function syncAllPlatformsToSheet(spreadsheetId: string) {
 
 // 특정 클라이언트의 플랫폼 데이터를 구글 시트에 추가하는 함수
 export async function addClientPlatformsToSheet(spreadsheetId: string, clientId: number) {
+  if (!sheets) {
+    console.warn('⚠️ Google Sheets API가 초기화되지 않았습니다.')
+    return { success: false, error: 'Google Sheets API가 초기화되지 않았습니다.' }
+  }
+  
   try {
     console.log(`🔄 클라이언트 ${clientId} 플랫폼 데이터 동기화 시작...`)
 
@@ -451,6 +482,11 @@ export async function syncNewClientToSheet(
     shop_id: string
   }>
 ) {
+  if (!sheets) {
+    console.warn('⚠️ Google Sheets API가 초기화되지 않았습니다.')
+    return { success: false, error: 'Google Sheets API가 초기화되지 않았습니다.' }
+  }
+  
   try {
     console.log(`🔄 새로운 클라이언트 실시간 동기화 시작: ${clientData.store_name}`)
     
