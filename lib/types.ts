@@ -74,13 +74,13 @@ export interface ClientPlatform {
 }
 
 // 파일 타입 열거형
-export type FileType = 'id_card' | 'contract' | 'cms_application';
+export type FileType = 'id_card' | 'contract' | 'business_registration';
 
 // 파일 타입 한글 매핑
 export const FILE_TYPE_LABELS: Record<FileType, string> = {
   id_card: '신분증',
   contract: '계약서',
-  cms_application: 'CMS 신청서'
+  business_registration: '사업자 등록증'
 };
 
 // 클라이언트 파일 타입

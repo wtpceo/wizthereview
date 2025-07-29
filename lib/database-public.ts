@@ -119,7 +119,6 @@ export async function createClientPublic(client: {
   contract_months: number
   contract_start_date?: string | null
   contract_period?: number | null
-  contract_end_date?: string | null
   platforms?: Array<{
     platform_name: string
     platform_id?: string
@@ -158,8 +157,7 @@ export async function createClientPublic(client: {
       service: client.service || '',
       contract_months: client.contract_months || 12,
       contract_start_date: client.contract_start_date,
-      contract_period: client.contract_period,
-      contract_end_date: client.contract_end_date
+      contract_period: client.contract_period
     }
     
     console.log('💾 클라이언트 정보 저장 중...')

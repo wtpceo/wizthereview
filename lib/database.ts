@@ -1,7 +1,15 @@
 import { supabase, supabaseAdmin } from './supabase'
 import { FileType, ClientFile, FileUploadRequest, FileUploadResponse } from './types'
-import { syncNewClientToSheet } from './google-sheets'
-import { sendNewClientNotification } from './email-service-resend'
+
+// 서버 사이드에서만 import하도록 동적 import 사용
+let syncNewClientToSheet: any
+let sendNewClientNotification: any
+
+if (typeof window === 'undefined') {
+  // 서버 사이드에서만 실행
+  syncNewClientToSheet = require('./google-sheets').syncNewClientToSheet
+  sendNewClientNotification = require('./email-service-resend').sendNewClientNotification
+}
 
 // 대행사 관련 함수들
 export async function getAgencies() {
@@ -246,22 +254,33 @@ export async function getClients(agencyId?: number) {
     if (error) throw error
 
     // 데이터 형태 변환 (기존 코드와 호환성을 위해)
-    const transformedData = data?.map((client: any) => ({
-      id: client.id,
-      storeName: client.store_name,
-      businessNumber: client.business_number,
-      ownerPhone: client.owner_phone,
-      platforms: client.platforms?.map((p: any) => p.platform_name) || [],
-      registeredAt: client.created_at ? client.created_at.split('T')[0] : '',
-      agency: client.agency?.name || '',
-      memo: client.memo || '',
-      guide: client.guide || '',
-      service: client.service || '',
-      contractMonths: client.contract_months || 12,
-      contractStartDate: client.contract_start_date || '',
-      contractPeriod: client.contract_period || null,
-      contractEndDate: client.contract_end_date || ''
-    }))
+    const transformedData = data?.map((client: any) => {
+      // 계약 종료일 계산 (등록일 + 계약 개월수)
+      let contractEndDate = ''
+      if (client.created_at && client.contract_months) {
+        const createdDate = new Date(client.created_at)
+        const endDate = new Date(createdDate)
+        endDate.setMonth(endDate.getMonth() + (client.contract_months || 12))
+        contractEndDate = endDate.toISOString().split('T')[0]
+      }
+
+      return {
+        id: client.id,
+        storeName: client.store_name,
+        businessNumber: client.business_number,
+        ownerPhone: client.owner_phone,
+        platforms: client.platforms?.map((p: any) => p.platform_name) || [],
+        registeredAt: client.created_at ? client.created_at.split('T')[0] : '',
+        agency: client.agency?.name || '',
+        memo: client.memo || '',
+        guide: client.guide || '',
+        service: client.service || '',
+        contractMonths: client.contract_months || 12,
+        contractStartDate: client.contract_start_date || '',
+        contractPeriod: client.contract_period || null,
+        contractEndDate: contractEndDate
+      }
+    })
 
     return { data: transformedData, error: null }
   } catch (error: any) {
@@ -287,7 +306,6 @@ export async function createClient(client: {
   contract_months?: number
   contract_start_date?: string | null
   contract_period?: number | null
-  contract_end_date?: string | null
   platforms?: Array<{
     platform_name: string
     platform_id: string
@@ -337,8 +355,7 @@ export async function createClient(client: {
         service: client.service,
         contract_months: client.contract_months || 12,
         contract_start_date: client.contract_start_date,
-        contract_period: client.contract_period,
-        contract_end_date: client.contract_end_date
+        contract_period: client.contract_period
       }])
       .select()
       .single()
@@ -379,23 +396,25 @@ export async function createClient(client: {
     })
 
     // 간단한 이메일 알림 발송 (Resend 사용)
-    try {
-      console.log('📧 광고주 등록 알림 이메일 발송 중...')
-      
-      const emailResult = await sendNewClientNotification({
-        store_name: client.store_name,
-        business_number: client.business_number,
-        owner_phone: client.owner_phone
-      })
-      
-      if (emailResult.success) {
-        console.log('✅ 알림 이메일 발송 성공')
-      } else {
-        console.log('⚠️ 이메일 발송 실패:', emailResult.error)
+    if (typeof window === 'undefined' && sendNewClientNotification) {
+      try {
+        console.log('📧 광고주 등록 알림 이메일 발송 중...')
+        
+        const emailResult = await sendNewClientNotification({
+          store_name: client.store_name,
+          business_number: client.business_number,
+          owner_phone: client.owner_phone
+        })
+        
+        if (emailResult.success) {
+          console.log('✅ 알림 이메일 발송 성공')
+        } else {
+          console.log('⚠️ 이메일 발송 실패:', emailResult.error)
+        }
+      } catch (emailError) {
+        console.error('❌ 이메일 발송 중 오류:', emailError)
+        // 이메일 실패는 치명적이지 않으므로 계속 진행
       }
-    } catch (emailError) {
-      console.error('❌ 알림 이메일 발송 실패:', emailError)
-      // 이메일 발송 실패는 광고주 등록을 막지 않음
     }
 
     // 3단계: 플랫폼 정보 저장 (있는 경우)
@@ -460,7 +479,7 @@ export async function createClient(client: {
           hasPassword: !!p.platform_password
         })))
         
-        if (validPlatforms.length > 0) {
+        if (validPlatforms.length > 0 && typeof window === 'undefined' && syncNewClientToSheet) {
           console.log('📤 구글 시트 동기화 함수 호출 중...')
           
           const syncResult = await syncNewClientToSheet(
@@ -523,7 +542,6 @@ export async function updateClient(
     contract_months?: number
     contract_start_date?: string | null
     contract_period?: number | null
-    contract_end_date?: string | null
   }
 ) {
   try {

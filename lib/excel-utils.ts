@@ -190,7 +190,7 @@ export const downloadClientsWithPlatformsExcel = async (
                 const fileTypeLabels: {[key: string]: string} = {
                   'id_card': '신분증',
                   'contract': '계약서',
-                  'cms_application': 'CMS 신청서'
+                  'business_registration': '사업자 등록증'
                 }
                 
                 fileData.push({

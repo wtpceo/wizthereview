@@ -30,7 +30,7 @@ interface PlatformInfo {
 
 interface FileInfo {
   file: File;
-  type: 'id_card' | 'contract' | 'cms_application';
+  type: 'id_card' | 'contract' | 'business_registration';
 }
 
 export default function RegisterClientPage() {
@@ -44,7 +44,7 @@ export default function RegisterClientPage() {
     owner_phone: '',
     contract_months: '12',
     contract_start_date: new Date().toISOString().split('T')[0], // 오늘 날짜를 기본값으로
-    contract_end_date: '', // 자동 계산됨
+    // contract_end_date: '', // 자동 계산됨 - DB에 칼럼 없음
     memo: '',
     guide: '',
     service: '',
@@ -70,7 +70,7 @@ export default function RegisterClientPage() {
       if (name === 'contract_start_date' || name === 'contract_months') {
         const startDate = name === 'contract_start_date' ? value : prev.contract_start_date;
         const months = name === 'contract_months' ? value : prev.contract_months;
-        newData.contract_end_date = calculateEndDate(startDate, months);
+        // newData.contract_end_date = calculateEndDate(startDate, months); // DB에 칼럼 없음
       }
       
       return newData;
@@ -107,7 +107,7 @@ export default function RegisterClientPage() {
     setPlatforms(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleFileSelect = (type: 'id_card' | 'contract' | 'cms_application') => {
+  const handleFileSelect = (type: 'id_card' | 'contract' | 'business_registration') => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.jpg,.jpeg,.png,.webp,.pdf,.doc,.docx';
@@ -182,7 +182,7 @@ export default function RegisterClientPage() {
           owner_phone: '',
           contract_months: '12',
           contract_start_date: new Date().toISOString().split('T')[0],
-          contract_end_date: '',
+          // contract_end_date: '', // DB에 칼럼 없음
           memo: '',
           guide: '',
           service: '',
@@ -346,6 +346,7 @@ export default function RegisterClientPage() {
                     </div>
                   </div>
                   
+                  {/* 계약 종료일 - DB에 칼럼이 없어서 주석 처리
                   <div className="space-y-2">
                     <Label htmlFor="contract_end_date" className="text-base font-medium">계약 종료일 (자동 계산)</Label>
                     <Input
@@ -357,6 +358,7 @@ export default function RegisterClientPage() {
                       className="h-12 text-base bg-gray-50"
                     />
                   </div>
+                  */}
 
                   <div className="space-y-2">
                     <Label htmlFor="service" className="text-base font-medium">서비스</Label>
@@ -583,12 +585,12 @@ export default function RegisterClientPage() {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <FileText className="h-5 w-5 text-orange-500" />
-                          <h4 className="font-medium text-sm">CMS 신청서</h4>
+                          <h4 className="font-medium text-sm">사업자 등록증</h4>
                         </div>
-                        {getFileName('cms_application') && (
+                        {getFileName('business_registration') && (
                           <Button
                             type="button"
-                            onClick={() => handleFileRemove('cms_application')}
+                            onClick={() => handleFileRemove('business_registration')}
                             variant="ghost"
                             size="sm"
                             className="h-8 w-8 p-0"
@@ -597,14 +599,14 @@ export default function RegisterClientPage() {
                           </Button>
                         )}
                       </div>
-                      {getFileName('cms_application') ? (
+                      {getFileName('business_registration') ? (
                         <div className="bg-white rounded p-3 border border-gray-200">
-                          <span className="text-sm truncate block">{getFileName('cms_application')}</span>
+                          <span className="text-sm truncate block">{getFileName('business_registration')}</span>
                         </div>
                       ) : (
                         <Button
                           type="button"
-                          onClick={() => handleFileSelect('cms_application')}
+                          onClick={() => handleFileSelect('business_registration')}
                           variant="outline"
                           className="w-full h-12"
                         >

@@ -38,7 +38,9 @@ const PLATFORM_SHEET_MAPPING = {
   '배달의민족': '배민',
   '쿠팡이츠': '쿠팡',
   '요기요': '요기요',
-  '땡겨요': '땡겨요'
+  '땡겨요': '땡겨요',
+  '배달이음': '배달이음',
+  '카카오매장': '카카오매장'
 }
 
 // 구글 시트 ID는 함수 파라미터로 받아서 사용
@@ -107,10 +109,20 @@ export async function addPlatformDataToSheet(
     const sheetName = PLATFORM_SHEET_MAPPING[platformName as keyof typeof PLATFORM_SHEET_MAPPING]
     
     if (!sheetName) {
+      console.error(`❌ 지원하지 않는 플랫폼: ${platformName}`)
+      console.error('지원되는 플랫폼:', Object.keys(PLATFORM_SHEET_MAPPING))
       throw new Error(`지원하지 않는 플랫폼입니다: ${platformName}`)
     }
 
     console.log(`📊 ${sheetName} 시트에 데이터 추가 중...`)
+    console.log('플랫폼 매핑:', { platformName, sheetName })
+    console.log('전송할 데이터:', {
+      storeName: data.storeName,
+      platformId: data.platformId,
+      ownerPhone: data.ownerPhone,
+      guide: data.guide,
+      memo: data.memo
+    })
 
     // 헤더 행 확인 및 생성
     await ensureSheetHeaders(spreadsheetId, sheetName)
@@ -132,20 +144,23 @@ export async function addPlatformDataToSheet(
       }
     }
 
-    // 데이터 행 추가
+    // 데이터 행 추가 (헤더 순서와 일치시킴)
+    // 헤더: ['업체명', '아이디', '비밀번호', '샵아이디', '등록일', '전화번호', '계약시작일', '계약기간', '계약종료일', '지침', '메모']
     const row = [
-      data.storeName,
-      data.platformId,
-      data.platformPassword,
-      data.shopId,
-      data.registeredAt || new Date().toISOString().split('T')[0],
-      data.ownerPhone || '',
-      data.contractStartDate || '',
-      data.contractPeriod || '',
-      data.contractEndDate || '',
-      data.guide || '',
-      data.memo || ''
+      data.storeName,           // 업체명
+      data.platformId,          // 아이디
+      data.platformPassword,    // 비밀번호
+      data.shopId,              // 샵아이디
+      data.registeredAt || new Date().toISOString().split('T')[0], // 등록일
+      data.ownerPhone || '',    // 전화번호 (연락처 → 전화번호)
+      data.contractStartDate || '', // 계약시작일
+      data.contractPeriod || '',    // 계약기간
+      data.contractEndDate || '',   // 계약종료일
+      data.guide || '',         // 지침
+      data.memo || ''           // 메모
     ]
+    
+    console.log('구글 시트에 추가할 행 데이터:', row)
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: spreadsheetId,
@@ -207,6 +222,8 @@ export async function addPlatformDataToSheet(
 // 시트 헤더 확인 및 생성 함수
 async function ensureSheetHeaders(spreadsheetId: string, sheetName: string) {
   try {
+    console.log(`🔍 ${sheetName} 시트 헤더 확인 중...`)
+    
     // 첫 번째 행 데이터 확인
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: spreadsheetId,
@@ -214,10 +231,13 @@ async function ensureSheetHeaders(spreadsheetId: string, sheetName: string) {
     })
 
     const headers = response.data.values?.[0]
+    console.log(`현재 헤더:`, headers)
     
     // 헤더가 없거나 완전하지 않은 경우 추가
     if (!headers || headers.length < 11) {
       const headerRow = ['업체명', '아이디', '비밀번호', '샵아이디', '등록일', '전화번호', '계약시작일', '계약기간', '계약종료일', '지침', '메모']
+      
+      console.log(`📝 헤더 추가 중:`, headerRow)
       
       await sheets.spreadsheets.values.update({
         spreadsheetId: spreadsheetId,
@@ -229,9 +249,12 @@ async function ensureSheetHeaders(spreadsheetId: string, sheetName: string) {
       })
       
       console.log(`📋 ${sheetName} 시트 헤더 추가 완료`)
+    } else {
+      console.log(`✅ ${sheetName} 시트 헤더 이미 존재`)
     }
   } catch (error: any) {
     console.error(`❌ ${sheetName} 시트 헤더 확인 실패:`, error)
+    console.error(`시트 이름 확인 필요: ${sheetName}`)
   }
 }
 
@@ -270,8 +293,12 @@ export async function syncAllPlatformsToSheet(spreadsheetId: string) {
     for (const client of clients) {
       const clientPlatforms = client.platforms || []
       
+      console.log(`👤 클라이언트: ${client.store_name}, 플랫폼 수: ${clientPlatforms.length}`)
+      
       for (const platform of clientPlatforms) {
         totalCount++
+        
+        console.log(`📱 플랫폼 처리 중: ${platform.platform_name}`)
         
         // 일괄 처리 시에는 개별 이메일 알림 비활성화
         const result = await addPlatformDataToSheet(spreadsheetId, platform.platform_name, {

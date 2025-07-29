@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Search, Edit, Trash2, Eye, Plus, X, Download, Filter, MoreHorizontal, Info, Copy, Check, Users, Upload, File, Paperclip, RefreshCw } from "lucide-react"
+import { Search, Edit, Trash2, Eye, Plus, X, Download, Filter, MoreHorizontal, Info, Copy, Check, Users, Upload, File, Paperclip, RefreshCw, ChevronUp, ChevronDown } from "lucide-react"
 import { downloadClientsExcel, downloadClientsWithPlatformsExcel } from "@/lib/excel-utils"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { getClientPlatforms, getClients, createClient, updateClient, updateClientPlatforms, deleteClient, uploadClientFile, getClientFiles, getFileDownloadUrl, deleteClientFile, checkFileSystemAvailable } from "@/lib/database"
@@ -61,6 +61,23 @@ interface Client {
   contractEndDate?: string
 }
 
+// 계약 만료 상태 체크 함수
+const getContractStatus = (endDate: string | undefined) => {
+  if (!endDate) return null
+  
+  const today = new Date()
+  const contractEnd = new Date(endDate)
+  const daysUntilExpiry = Math.floor((contractEnd.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+  
+  if (daysUntilExpiry < 0) {
+    return { status: 'expired', label: '만료됨', className: 'bg-red-100 text-red-800' }
+  } else if (daysUntilExpiry <= 30) {
+    return { status: 'expiring', label: `${daysUntilExpiry}일 남음`, className: 'bg-orange-100 text-orange-800' }
+  } else {
+    return { status: 'active', label: `${Math.floor(daysUntilExpiry / 30)}개월 남음`, className: 'bg-green-100 text-green-800' }
+  }
+}
+
 export default function ClientsPage() {
   console.log("ClientsPage 컴포넌트 렌더링 시작")
   
@@ -79,6 +96,12 @@ export default function ClientsPage() {
   // 필터 상태 추가
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'expired' | 'expiring'>('all')
   const [filterPlatform, setFilterPlatform] = useState<string>('all')
+  
+  // 정렬 상태 추가
+  type SortColumn = 'storeName' | 'businessNumber' | 'ownerPhone' | 'platforms' | 'agency' | 'guide' | 'service' | 'memo' | 'contractMonths' | 'contractEndDate' | 'registeredAt'
+  type SortDirection = 'asc' | 'desc'
+  const [sortColumn, setSortColumn] = useState<SortColumn | null>(null)
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
   
   // 엑셀 업로드 모달 상태
   const [isExcelUploadModalOpen, setIsExcelUploadModalOpen] = useState(false)
@@ -158,7 +181,7 @@ export default function ClientsPage() {
   // 필터가 변경될 때마다 자동으로 검색
   useEffect(() => {
     handleSearch()
-  }, [clients, searchTerm, selectedAgency, filterStatus, filterPlatform])
+  }, [clients, searchTerm, selectedAgency, filterStatus, filterPlatform, sortColumn, sortDirection])
 
   // 페이지 visibility 변화 감지 (다른 탭에서 돌아올 때)
   useEffect(() => {
@@ -198,22 +221,19 @@ export default function ClientsPage() {
     
     // 계약 상태 필터
     if (filterStatus !== 'all') {
-      const today = new Date()
-      const thirtyDaysFromNow = new Date()
-      thirtyDaysFromNow.setDate(today.getDate() + 30)
-      
       filtered = filtered.filter((client) => {
-        if (!client.contractEndDate) return filterStatus === 'active'
+        if (!client.contractEndDate) return filterStatus === 'all'
         
-        const endDate = new Date(client.contractEndDate)
+        const status = getContractStatus(client.contractEndDate)
+        if (!status) return false
         
         switch (filterStatus) {
           case 'active':
-            return endDate >= today
+            return status.status === 'active'
           case 'expired':
-            return endDate < today
+            return status.status === 'expired'
           case 'expiring':
-            return endDate >= today && endDate <= thirtyDaysFromNow
+            return status.status === 'expiring'
           default:
             return true
         }
@@ -228,7 +248,63 @@ export default function ClientsPage() {
       })
     }
 
+    // 정렬 적용
+    if (sortColumn) {
+      filtered = [...filtered].sort((a, b) => {
+        let aValue: any = a[sortColumn]
+        let bValue: any = b[sortColumn]
+        
+        // platforms 배열인 경우 길이로 비교
+        if (sortColumn === 'platforms') {
+          aValue = Array.isArray(a.platforms) ? a.platforms.length : 0
+          bValue = Array.isArray(b.platforms) ? b.platforms.length : 0
+        }
+        
+        // 날짜 필드인 경우
+        if (sortColumn === 'registeredAt' || sortColumn === 'contractEndDate') {
+          aValue = aValue ? new Date(aValue).getTime() : 0
+          bValue = bValue ? new Date(bValue).getTime() : 0
+        }
+        
+        // 숫자 필드인 경우
+        if (sortColumn === 'contractMonths') {
+          aValue = Number(aValue) || 0
+          bValue = Number(bValue) || 0
+        }
+        
+        // null/undefined 처리
+        if (aValue === null || aValue === undefined) aValue = ''
+        if (bValue === null || bValue === undefined) bValue = ''
+        
+        // 문자열 비교
+        if (typeof aValue === 'string' && typeof bValue === 'string') {
+          return sortDirection === 'asc' 
+            ? aValue.localeCompare(bValue) 
+            : bValue.localeCompare(aValue)
+        }
+        
+        // 숫자 비교
+        if (sortDirection === 'asc') {
+          return aValue > bValue ? 1 : aValue < bValue ? -1 : 0
+        } else {
+          return aValue < bValue ? 1 : aValue > bValue ? -1 : 0
+        }
+      })
+    }
+
     setFilteredClients(filtered)
+  }
+  
+  // 정렬 컬럼 클릭 핸들러
+  const handleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      // 같은 컬럼 클릭 시 방향 토글
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      // 다른 컬럼 클릭 시 해당 컬럼으로 변경하고 오름차순으로 시작
+      setSortColumn(column)
+      setSortDirection('asc')
+    }
   }
 
   const handleDownloadExcel = async () => {
@@ -1332,18 +1408,18 @@ export default function ClientsPage() {
                             </div>
                           </div>
 
-                          {/* CMS 신청서 */}
+                          {/* 사업자 등록증 */}
                           <div className="border border-gray-200 rounded-lg p-4 space-y-3">
                             <div className="flex items-center space-x-2">
                               <File className="h-4 w-4 text-orange-600" />
-                              <h4 className="font-medium text-gray-900">CMS 신청서</h4>
+                              <h4 className="font-medium text-gray-900">사업자 등록증</h4>
                             </div>
                             
                             {/* 기존 파일 표시 */}
-                            {clientFiles.find(f => f.file_type === 'cms_application') ? (
+                            {clientFiles.find(f => f.file_type === 'business_registration') ? (
                               <div className="space-y-2">
                                 {(() => {
-                                  const file = clientFiles.find(f => f.file_type === 'cms_application')!
+                                  const file = clientFiles.find(f => f.file_type === 'business_registration')!
                                   return (
                                     <div className="bg-gray-50 rounded p-2">
                                       <p className="text-xs font-medium text-gray-900 truncate">{file.file_name}</p>
@@ -1384,12 +1460,12 @@ export default function ClientsPage() {
                             <div className="space-y-2">
                               <input
                                 type="file"
-                                id="cms_application_upload"
+                                id="business_registration_upload"
                                 accept="image/*,.pdf,.doc,.docx"
                                 onChange={(e) => {
                                   const file = e.target.files?.[0]
                                   if (file && editingClient) {
-                                    handleFileUpload('cms_application', file, editingClient.id)
+                                    handleFileUpload('business_registration', file, editingClient.id)
                                   }
                                 }}
                                 className="hidden"
@@ -1398,11 +1474,11 @@ export default function ClientsPage() {
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                onClick={() => document.getElementById('cms_application_upload')?.click()}
-                                disabled={uploadingFiles.cms_application}
+                                onClick={() => document.getElementById('business_registration_upload')?.click()}
+                                disabled={uploadingFiles.business_registration}
                                 className="w-full h-8 text-xs"
                               >
-                                {uploadingFiles.cms_application ? (
+                                {uploadingFiles.business_registration ? (
                                   <>
                                     <div className="animate-spin rounded-full h-3 w-3 border-b border-gray-600 mr-1"></div>
                                     업로드 중...
@@ -1512,9 +1588,24 @@ export default function ClientsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">전체</SelectItem>
-                    <SelectItem value="active">계약 유효</SelectItem>
-                    <SelectItem value="expiring">만료 예정 (30일 이내)</SelectItem>
-                    <SelectItem value="expired">계약 만료</SelectItem>
+                    <SelectItem value="active">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                        계약 유효
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="expiring">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-orange-500"></div>
+                        만료 임박 (30일 이내)
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="expired">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                        계약 만료
+                      </div>
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1559,19 +1650,129 @@ export default function ClientsPage() {
             <Table>
               <TableHeader className="bg-gray-50">
                 <TableRow>
-                  <TableHead className="font-semibold">매장명</TableHead>
-                <TableHead className="font-semibold">사업자번호</TableHead>
-                <TableHead className="font-semibold">연락처</TableHead>
-                <TableHead className="font-semibold">플랫폼</TableHead>
-                <TableHead className="font-semibold">대행사</TableHead>
-                <TableHead className="font-semibold">지침</TableHead>
-                <TableHead className="font-semibold">서비스</TableHead>
-                <TableHead className="font-semibold">메모</TableHead>
-                <TableHead className="font-semibold">파일</TableHead>
-                <TableHead className="font-semibold">계약기간</TableHead>
-                <TableHead className="font-semibold">계약종료일</TableHead>
-                <TableHead className="font-semibold">등록일</TableHead>
-                <TableHead className="font-semibold">관리</TableHead>
+                  <TableHead 
+                    className="font-semibold cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleSort('storeName')}
+                  >
+                    <div className="flex items-center gap-1">
+                      매장명
+                      {sortColumn === 'storeName' && (
+                        sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="font-semibold cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleSort('businessNumber')}
+                  >
+                    <div className="flex items-center gap-1">
+                      사업자번호
+                      {sortColumn === 'businessNumber' && (
+                        sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="font-semibold cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleSort('ownerPhone')}
+                  >
+                    <div className="flex items-center gap-1">
+                      연락처
+                      {sortColumn === 'ownerPhone' && (
+                        sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="font-semibold cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleSort('platforms')}
+                  >
+                    <div className="flex items-center gap-1">
+                      플랫폼
+                      {sortColumn === 'platforms' && (
+                        sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="font-semibold cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleSort('agency')}
+                  >
+                    <div className="flex items-center gap-1">
+                      대행사
+                      {sortColumn === 'agency' && (
+                        sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="font-semibold cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleSort('guide')}
+                  >
+                    <div className="flex items-center gap-1">
+                      지침
+                      {sortColumn === 'guide' && (
+                        sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="font-semibold cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleSort('service')}
+                  >
+                    <div className="flex items-center gap-1">
+                      서비스
+                      {sortColumn === 'service' && (
+                        sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="font-semibold cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleSort('memo')}
+                  >
+                    <div className="flex items-center gap-1">
+                      메모
+                      {sortColumn === 'memo' && (
+                        sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead className="font-semibold">파일</TableHead>
+                  <TableHead 
+                    className="font-semibold cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleSort('contractMonths')}
+                  >
+                    <div className="flex items-center gap-1">
+                      계약기간
+                      {sortColumn === 'contractMonths' && (
+                        sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="font-semibold cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleSort('contractEndDate')}
+                  >
+                    <div className="flex items-center gap-1">
+                      계약종료일
+                      {sortColumn === 'contractEndDate' && (
+                        sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="font-semibold cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleSort('registeredAt')}
+                  >
+                    <div className="flex items-center gap-1">
+                      등록일
+                      {sortColumn === 'registeredAt' && (
+                        sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead className="font-semibold">관리</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1639,8 +1840,24 @@ export default function ClientsPage() {
                         {client.contractMonths}개월
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-gray-600 text-center">
-                      {client.contractEndDate ? new Date(client.contractEndDate).toLocaleDateString('ko-KR') : '-'}
+                    <TableCell className="text-center">
+                      {client.contractEndDate ? (
+                        <div className="space-y-1">
+                          <div className="text-sm text-gray-600">
+                            {new Date(client.contractEndDate).toLocaleDateString('ko-KR')}
+                          </div>
+                          {(() => {
+                            const status = getContractStatus(client.contractEndDate)
+                            return status ? (
+                              <Badge variant="secondary" className={`text-xs ${status.className}`}>
+                                {status.label}
+                              </Badge>
+                            ) : null
+                          })()}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-gray-600">{client.registeredAt}</TableCell>
                     <TableCell>
@@ -1757,11 +1974,14 @@ export default function ClientsPage() {
                     <Badge variant="secondary" className="bg-green-100 text-green-800 text-xs">
                       {client.contractMonths}개월
                     </Badge>
-                    {client.contractEndDate && (
-                      <Badge variant="outline" className="text-xs text-orange-600">
-                        ~{new Date(client.contractEndDate).toLocaleDateString('ko-KR')}
-                      </Badge>
-                    )}
+                    {client.contractEndDate && (() => {
+                      const status = getContractStatus(client.contractEndDate)
+                      return status ? (
+                        <Badge variant="secondary" className={`text-xs ${status.className}`}>
+                          {status.label}
+                        </Badge>
+                      ) : null
+                    })()}
                     <Button
                       variant="outline"
                       size="sm"

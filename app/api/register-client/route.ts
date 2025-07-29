@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
       contract_months: contractMonths,
       contract_start_date: body.contract_start_date || null,
       contract_period: contractMonths,
-      contract_end_date: body.contract_end_date || null,
+      // contract_end_date: body.contract_end_date || null, // DB에 칼럼 없음
       platforms: platforms.filter((p: any) => p.platform_name), // 플랫폼명이 있는 것만 필터링
     };
 
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 파일 업로드 처리
-    const fileTypes: FileType[] = ['id_card', 'contract', 'cms_application'];
+    const fileTypes: FileType[] = ['id_card', 'contract', 'business_registration'];
     const uploadPromises: Promise<any>[] = [];
     
     for (const fileType of fileTypes) {
