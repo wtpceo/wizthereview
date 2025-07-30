@@ -9,7 +9,10 @@ export async function POST(request: NextRequest) {
     console.log('📋 환경 변수 상태:', {
       hasGoogleServiceAccount: !!process.env.GOOGLE_SERVICE_ACCOUNT_KEY,
       hasSpreadsheetId: !!process.env.GOOGLE_SHEETS_SPREADSHEET_ID,
-      keyLength: process.env.GOOGLE_SERVICE_ACCOUNT_KEY?.length || 0
+      keyLength: process.env.GOOGLE_SERVICE_ACCOUNT_KEY?.length || 0,
+      nodeEnv: process.env.NODE_ENV,
+      vercelEnv: process.env.VERCEL_ENV,
+      allEnvKeys: Object.keys(process.env).filter(key => key.includes('GOOGLE')).join(', ')
     })
     
     const body = await request.json()

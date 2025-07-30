@@ -83,23 +83,7 @@ export default function ExcelUpload({ onUpload, agencyId }: ExcelUploadProps) {
 
     setLoading(true)
     try {
-      const response = await fetch('/api/clients/bulk-upload', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          agencyId,
-          clients: preview
-        }),
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || '업로드 중 오류가 발생했습니다.')
-      }
-
+      // bulk-upload API가 없으므로 직접 onUpload 콜백 실행
       onUpload(preview)
       setPreview([])
       setError(null)
