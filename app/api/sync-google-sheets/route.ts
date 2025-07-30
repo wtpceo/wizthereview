@@ -5,6 +5,13 @@ export async function POST(request: NextRequest) {
   try {
     console.log('🔄 구글 시트 동기화 API 호출됨')
     
+    // 환경 변수 확인
+    console.log('📋 환경 변수 상태:', {
+      hasGoogleServiceAccount: !!process.env.GOOGLE_SERVICE_ACCOUNT_KEY,
+      hasSpreadsheetId: !!process.env.GOOGLE_SHEETS_SPREADSHEET_ID,
+      keyLength: process.env.GOOGLE_SERVICE_ACCOUNT_KEY?.length || 0
+    })
+    
     const body = await request.json()
     const { type, clientId, spreadsheetId } = body
 

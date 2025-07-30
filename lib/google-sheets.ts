@@ -10,6 +10,12 @@ let sheets: any = null;
 // 환경 변수가 설정된 경우에만 Google Sheets 클라이언트 초기화
 const serviceAccountKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
 
+console.log('🔍 Google Sheets 초기화 상태:', {
+  hasServiceAccountKey: !!serviceAccountKey,
+  keyLength: serviceAccountKey?.length || 0,
+  keyPrefix: serviceAccountKey?.substring(0, 50) + '...' || '없음'
+});
+
 if (serviceAccountKey) {
   try {
     // JSON 문자열을 파싱하고 이스케이프된 개행 문자를 실제 개행 문자로 변환
@@ -30,6 +36,7 @@ if (serviceAccountKey) {
     console.log('✅ Google Sheets API 클라이언트 초기화 성공');
   } catch (error) {
     console.error('❌ Google Service Account 자격증명 파싱 실패:', error);
+    console.error('❌ 파싱 시도한 문자열:', serviceAccountKey?.substring(0, 100) + '...');
     // 환경 변수가 잘못된 경우에도 앱이 시작될 수 있도록 에러를 throw하지 않음
   }
 } else {
