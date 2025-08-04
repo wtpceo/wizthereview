@@ -914,6 +914,29 @@ export default function ClientsPage() {
             )}
           </Button>
           <Button
+            onClick={async () => {
+              try {
+                const response = await fetch('/api/test-sync', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    spreadsheetId: '1QRNRaKjMaTgAcpSyjz-IeckdtcX2oNDxx13fe4vI5YM'
+                  })
+                })
+                const result = await response.json()
+                console.log('테스트 결과:', result)
+                alert(JSON.stringify(result, null, 2))
+              } catch (error: any) {
+                console.error('테스트 오류:', error)
+                alert('테스트 실패: ' + error.message)
+              }
+            }}
+            className="bg-purple-600 hover:bg-purple-700 text-sm"
+            size="sm"
+          >
+            API 테스트
+          </Button>
+          <Button
             onClick={() => setIsExcelUploadModalOpen(true)}
             className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-sm"
             size="sm"

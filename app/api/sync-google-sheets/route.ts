@@ -26,14 +26,27 @@ function getGoogleSheets() {
     const credentialsJson = Buffer.from(base64Credentials, 'base64').toString('utf-8');
     const credentials = JSON.parse(credentialsJson);
     
+    console.log('📄 자격증명 파싱 성공:', {
+      type: credentials.type,
+      project_id: credentials.project_id,
+      client_email: credentials.client_email
+    });
+    
     const auth = new google.auth.GoogleAuth({
       credentials,
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
     
-    return google.sheets({ version: 'v4', auth });
+    const sheets = google.sheets({ version: 'v4', auth });
+    console.log('✅ Google Sheets 객체 생성 성공');
+    
+    return sheets;
   } catch (error) {
     console.error('❌ Google Service Account 자격증명 초기화 실패:', error);
+    console.error('오류 상세:', {
+      message: error.message,
+      stack: error.stack
+    });
     return null;
   }
 }
@@ -95,14 +108,18 @@ async function ensureSheetHeaders(sheets: any, spreadsheetId: string, sheetName:
 export async function POST(request: NextRequest) {
   try {
     console.log('🔄 구글 시트 동기화 API 호출됨')
+    console.log('📋 Request headers:', request.headers)
     
     const sheets = getGoogleSheets();
     if (!sheets) {
+      console.error('❌ Google Sheets API 초기화 실패 - sheets 객체가 null입니다')
       return NextResponse.json(
         { success: false, error: 'Google Sheets API가 초기화되지 않았습니다. 환경 변수를 확인하세요.' },
         { status: 500 }
       )
     }
+    
+    console.log('✅ Google Sheets API 초기화 성공')
     
     const body = await request.json()
     const { type, clientId, spreadsheetId } = body
@@ -236,10 +253,12 @@ export async function POST(request: NextRequest) {
 
   } catch (error: any) {
     console.error('💥 구글 시트 동기화 API 오류:', error)
+    console.error('오류 스택:', error.stack)
     return NextResponse.json(
       { 
         success: false, 
-        error: error.message || '동기화 중 오류가 발생했습니다.' 
+        error: error.message || '동기화 중 오류가 발생했습니다.',
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
       },
       { status: 500 }
     )
